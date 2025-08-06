@@ -6,19 +6,16 @@ import Link from 'next/link';
 import {
   Avatar,
   AvatarFallback,
-  AvatarImage,
 } from "@/components/ui/avatar";
 import {
   Bot,
   CircleUser,
   Search,
-  Bell,
   Wine,
   Send,
   LoaderCircle,
   AlertTriangle,
   PlusCircle,
-  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +39,7 @@ import type { Vineyard, Message } from "@/types";
 import { chatWithFermentia } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { initialVineyards } from "@/lib/data";
+import { getVineyards } from "@/lib/data";
 
 const VineyardCard: React.FC<{ vineyard: Vineyard }> = ({ vineyard }) => (
   <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300">
@@ -79,12 +76,15 @@ const ChatPanel: React.FC = () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    
+    setMessages(newMessages);
     setInput("");
     setIsLoading(true);
 
     try {
-      const response = await chatWithFermentia(messages, userMessage.content);
+      const chatHistory = newMessages.filter(m => m.role !== 'tool');
+      const response = await chatWithFermentia(chatHistory, userMessage.content);
       const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -240,7 +240,7 @@ const Header: React.FC = () => (
 
 
 export default function DashboardPage() {
-  const [vineyards] = useState<Vineyard[]>(initialVineyards);
+  const [vineyards] = useState<Vineyard[]>(getVineyards());
   
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -277,3 +277,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
