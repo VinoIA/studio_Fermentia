@@ -48,25 +48,6 @@ export async function chatWithFermentia(history: z.infer<typeof MessageSchema>[]
   return fermentiaChatFlow({ history, message });
 }
 
-const prompt = ai.definePrompt({
-  name: 'fermentiaChatPrompt',
-  input: { schema: FermentiaChatInputSchema },
-  output: { schema: FermentiaChatOutputSchema },
-  tools: [vineyardInfoTool],
-  system: `Eres Fermentia, un asistente experto en IA especializado en viticultura (cultivo de viñedos). Tu función es proporcionar consejos expertos, responder preguntas y ofrecer sugerencias relacionadas con el cultivo de uvas y la gestión de viñedos.
-
-Habla siempre en español.
-
-Tienes acceso a datos en tiempo real de los viñedos del usuario. Utiliza la herramienta getVineyardInfo para responder preguntas sobre el estado de las plagas, resúmenes de viñedos o cualquier otra consulta relacionada con los datos.
-
-Sé amable, conocedor y servicial.`,
-  prompt: `{{#each history}}
-{{role}}: {{content}}
-{{/each}}
-user: {{message}}
-assistant:`,
-});
-
 const fermentiaChatFlow = ai.defineFlow(
   {
     name: 'fermentiaChatFlow',
@@ -74,7 +55,26 @@ const fermentiaChatFlow = ai.defineFlow(
     outputSchema: FermentiaChatOutputSchema,
   },
   async (input) => {
-    const { output } = await prompt(input);
-    return output!;
+    // Construir el prompt manualmente
+    let conversationContext = '';
+    for (const msg of input.history) {
+      conversationContext += `${msg.role}: ${msg.content}\n`;
+    }
+    conversationContext += `user: ${input.message}\n`;
+
+    const response = await ai.generate({
+      model: 'googleai/gemini-2.0-flash',
+      tools: [vineyardInfoTool],
+      system: `Eres Fermentia, un asistente experto en IA especializado en viticultura (cultivo de viñedos). Tu función es proporcionar consejos expertos, responder preguntas y ofrecer sugerencias relacionadas con el cultivo de uvas y la gestión de viñedos.
+
+Habla siempre en español.
+
+Tienes acceso a datos en tiempo real de los viñedos del usuario. Utiliza la herramienta getVineyardInfo para responder preguntas sobre el estado de las plagas, resúmenes de viñedos o cualquier otra consulta relacionada con los datos.
+
+Sé amable, conocedor y servicial.`,
+      prompt: conversationContext,
+    });
+
+    return { text: response.text };
   }
 );
