@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 
 const chatSchema = z.object({
   history: z.array(z.object({
-    role: z.enum(['user', 'assistant']),
+    role: z.enum(['user', 'assistant', 'tool']),
     content: z.string(),
   })),
   message: z.string(),
