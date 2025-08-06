@@ -1,10 +1,10 @@
 'use server';
 /**
- * @fileOverview Fermentia, an AI expert in viticulture.
+ * @fileOverview Fermentia, un experto en IA en viticultura.
  *
- * - chatWithFermentia - A function to chat with Fermentia.
- * - FermentiaChatInput - The input type for the chat function.
- * - FermentiaChatOutput - The return type for the chat function.
+ * - chatWithFermentia - Una función para chatear con Fermentia.
+ * - FermentiaChatInput - El tipo de entrada para la función de chat.
+ * - FermentiaChatOutput - El tipo de retorno para la función de chat.
  */
 
 import { ai } from '@/ai/genkit';
@@ -23,7 +23,7 @@ const FermentiaChatInputSchema = z.object({
 export type FermentiaChatInput = z.infer<typeof FermentiaChatInputSchema>;
 
 const FermentiaChatOutputSchema = z.object({
-  text: z.string().describe("The AI assistant's response."),
+  text: z.string().describe("La respuesta del asistente de IA."),
 });
 export type FermentiaChatOutput = z.infer<typeof FermentiaChatOutputSchema>;
 
@@ -31,9 +31,9 @@ export type FermentiaChatOutput = z.infer<typeof FermentiaChatOutputSchema>;
 const vineyardInfoTool = ai.defineTool(
   {
     name: 'getVineyardInfo',
-    description: 'Get information about the vineyards, including pest alerts, grape varietals, and other IoT data.',
+    description: 'Obtener información sobre los viñedos, incluidas alertas de plagas, variedades de uva y otros datos de IoT.',
     inputSchema: z.object({
-      vineyardName: z.string().optional().describe('The name of a specific vineyard to get information about.'),
+      vineyardName: z.string().optional().describe('El nombre de un viñedo específico para obtener información.'),
     }),
     outputSchema: z.any(),
   },
@@ -43,7 +43,7 @@ const vineyardInfoTool = ai.defineTool(
 );
 
 
-// Simple, non-streamed chat function
+// Función de chat simple y no transmitida por streaming
 export async function chatWithFermentia(history: z.infer<typeof MessageSchema>[], message: string): Promise<FermentiaChatOutput> {
   return fermentiaChatFlow({ history, message });
 }
@@ -53,11 +53,13 @@ const prompt = ai.definePrompt({
   input: { schema: FermentiaChatInputSchema },
   output: { schema: FermentiaChatOutputSchema },
   tools: [vineyardInfoTool],
-  system: `You are Fermentia, an expert AI assistant specializing in viticulture (vineyard cultivation). Your role is to provide expert advice, answer questions, and offer suggestions related to growing grapes and managing vineyards.
+  system: `Eres Fermentia, un asistente experto en IA especializado en viticultura (cultivo de viñedos). Tu función es proporcionar consejos expertos, responder preguntas y ofrecer sugerencias relacionadas con el cultivo de uvas y la gestión de viñedos.
 
-You have access to real-time data from the user's vineyards. Use the getVineyardInfo tool to answer questions about pest status, vineyard summaries, or any other data-related query.
+Habla siempre en español.
 
-Be friendly, knowledgeable, and helpful.`,
+Tienes acceso a datos en tiempo real de los viñedos del usuario. Utiliza la herramienta getVineyardInfo para responder preguntas sobre el estado de las plagas, resúmenes de viñedos o cualquier otra consulta relacionada con los datos.
+
+Sé amable, conocedor y servicial.`,
   prompt: `{{#each history}}
 {{role}}: {{content}}
 {{/each}}

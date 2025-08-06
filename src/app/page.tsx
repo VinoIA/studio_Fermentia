@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from 'next/image';
+import Link from 'next/link';
 import {
   Avatar,
   AvatarFallback,
@@ -12,16 +13,16 @@ import {
   CircleUser,
   Search,
   Bell,
-  ChevronDown,
-  Dot,
+  Wine,
   Send,
   LoaderCircle,
   AlertTriangle,
-  Wine,
+  PlusCircle,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Sheet,
   SheetContent,
@@ -30,15 +31,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
-  Sidebar,
-  SidebarProvider,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarHeader,
-  SidebarContent,
-  SidebarInset,
-} from "@/components/ui/sidebar";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { Vineyard, Message } from "@/types";
 import { chatWithFermentia } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +45,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { initialVineyards } from "@/lib/data";
 
 const VineyardCard: React.FC<{ vineyard: Vineyard }> = ({ vineyard }) => (
-  <Card className="bg-card border-border/50 overflow-hidden">
+  <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300">
     <CardContent className="p-0 flex items-stretch">
       <div className="flex-shrink-0 w-[150px] md:w-[200px]">
          <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
@@ -57,12 +56,12 @@ const VineyardCard: React.FC<{ vineyard: Vineyard }> = ({ vineyard }) => (
           {vineyard.location}
         </p>
         <p className="text-sm text-muted-foreground">
-          Plots: {vineyard.totalPlots} | Grapes: {vineyard.grapeVarietals}
+          Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
         </p>
          {vineyard.iotData.pests && (
             <Badge variant="destructive" className="mt-2 w-fit">
               <AlertTriangle className="mr-1 h-3 w-3" />
-              Pest Alert
+              Alerta de Plaga
             </Badge>
           )}
       </div>
@@ -90,7 +89,7 @@ const ChatPanel: React.FC = () => {
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
        console.error(error);
-       const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again later." };
+       const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: "Lo siento, tengo problemas para conectarme. Por favor, inténtalo de nuevo más tarde." };
        setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -100,16 +99,16 @@ const ChatPanel: React.FC = () => {
   return (
      <Sheet>
         <SheetTrigger asChild>
-          <Button variant="default" className="flex items-center gap-2">
+          <Button>
             <Bot className="h-5 w-5" />
-            Chat with Fermentia
+            <span>Habla con Fermentia</span>
           </Button>
         </SheetTrigger>
         <SheetContent className="w-[400px] sm:w-[540px] bg-background p-0">
           <SheetHeader className="p-6 border-b border-border">
             <SheetTitle className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-primary"/>
-              <span>Fermentia, your vineyard AI expert</span>
+              <span>Fermentia, tu experto en viñedos</span>
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col h-[calc(100%-76px)]">
@@ -118,9 +117,9 @@ const ChatPanel: React.FC = () => {
                  {messages.length === 0 && (
                   <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
                     <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
-                    <h3 className="font-semibold text-lg text-foreground mb-2">Welcome to Fermentia!</h3>
-                    <p className="text-sm">Ask me about your vineyards!</p>
-                    <p className="text-xs mt-2">e.g., "Any pest alerts this week?" or "Give me a summary for Oak Ridge Estate."</p>
+                    <h3 className="font-semibold text-lg text-foreground mb-2">¡Bienvenido a Fermentia!</h3>
+                    <p className="text-sm">¡Pregúntame sobre tus viñedos!</p>
+                    <p className="text-xs mt-2">ej: "¿Hay alertas de plagas?" o "Resumen de Finca Roble Alto."</p>
                   </div>
                 )}
                 {messages.map((message) => (
@@ -174,7 +173,7 @@ const ChatPanel: React.FC = () => {
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask Fermentia..."
+                  placeholder="Pregúntale a Fermentia..."
                   className="pr-12 bg-muted focus:bg-background"
                   disabled={isLoading}
                 />
@@ -194,86 +193,87 @@ const ChatPanel: React.FC = () => {
   )
 }
 
+const Header: React.FC = () => (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
+            <Link href="/" className="flex items-center gap-2 text-lg font-semibold md:text-base">
+                <Wine className="h-6 w-6 text-primary" />
+                <span className="sr-only">Vineyard AI</span>
+            </Link>
+            <Link href="/" className="text-foreground transition-colors hover:text-foreground">
+                Resumen
+            </Link>
+            <Link href="/vineyards" className="text-muted-foreground transition-colors hover:text-foreground">
+                Gestionar Viñedos
+            </Link>
+        </nav>
+        <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
+            <form className="ml-auto flex-1 sm:flex-initial">
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Buscar..."
+                        className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]"
+                    />
+                </div>
+            </form>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="secondary" size="icon" className="rounded-full">
+                        <CircleUser className="h-5 w-5" />
+                        <span className="sr-only">Toggle user menu</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>Ajustes</DropdownMenuItem>
+                    <DropdownMenuItem>Soporte</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>Cerrar Sesión</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    </header>
+);
+
 
 export default function DashboardPage() {
   const [vineyards] = useState<Vineyard[]>(initialVineyards);
   
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <Sidebar>
-          <SidebarHeader>
-            <div className="flex items-center gap-2 p-2">
-              <Wine className="h-8 w-8 text-primary" />
-              <h1 className="font-bold text-lg">Vineyard AI</h1>
-            </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive>
-                  <Wine />
-                  Vineyard AI
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarContent>
-        </Sidebar>
-        <SidebarInset>
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-6 backdrop-blur-md">
-            <div className="flex items-center gap-4">
-                {/* Search input can be added here if needed */}
-            </div>
-            <div className="flex items-center gap-4">
-               <div className="relative w-full max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search"
-                  className="bg-muted pl-10"
-                />
-              </div>
-              <Button variant="ghost" size="icon">
-                <Bell className="h-5 w-5" />
-                <span className="sr-only">Notifications</span>
-              </Button>
-              <Avatar className="h-9 w-9">
-                <AvatarImage src="https://placehold.co/40x40.png" alt="@user" data-ai-hint="person avatar"/>
-                <AvatarFallback>U</AvatarFallback>
-              </Avatar>
-            </div>
-          </header>
-          <main className="flex-1 p-6">
-            <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold">Vineyard Overview</h1>
-                  <p className="text-muted-foreground">
-                    Monitor the health and status of your vineyards in real-time.
-                  </p>
+    <div className="flex min-h-screen w-full flex-col">
+        <Header />
+        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+            <div className="flex items-center">
+                <h1 className="text-lg font-semibold md:text-2xl">Resumen de Viñedos</h1>
+                <div className="ml-auto flex items-center gap-2">
+                    <ChatPanel />
                 </div>
-                <ChatPanel />
-              </div>
-              
-              <div className="space-y-4">
-                <h2 className="text-2xl font-semibold">Vineyard Summary</h2>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {vineyards.map((vineyard) => (
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+                {vineyards.map((vineyard) => (
                     <VineyardCard key={vineyard.id} vineyard={vineyard} />
-                  ))}
-                </div>
-              </div>
+                ))}
+                 <Link href="/vineyards/new">
+                    <Card className="flex flex-col items-center justify-center h-full border-2 border-dashed hover:border-primary/80 hover:bg-muted/50 transition-colors duration-300 cursor-pointer">
+                        <CardContent className="flex flex-col items-center justify-center p-6">
+                            <PlusCircle className="h-12 w-12 text-muted-foreground" />
+                            <p className="mt-4 text-center font-semibold">Añadir Nuevo Viñedo</p>
+                        </CardContent>
+                    </Card>
+                </Link>
+            </div>
 
-              <div className="space-y-4">
-                <h2 className="text-2xl font-semibold">Map View</h2>
+             <div className="space-y-4">
+                <h2 className="text-2xl font-semibold">Vista de Mapa</h2>
                 <Card className="overflow-hidden">
-                  <Image src="https://placehold.co/1200x500.png" data-ai-hint="map" width={1200} height={500} alt="Map of vineyards" className="w-full object-cover"/>
+                  <Image src="https://placehold.co/1200x500.png" data-ai-hint="map" width={1200} height={500} alt="Mapa de viñedos" className="w-full object-cover"/>
                 </Card>
               </div>
 
-            </div>
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+        </main>
+    </div>
   );
 }
