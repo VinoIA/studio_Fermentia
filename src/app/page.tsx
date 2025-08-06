@@ -17,6 +17,7 @@ import {
   Send,
   LoaderCircle,
   AlertTriangle,
+  Wine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,25 +135,27 @@ const ChatPanel: React.FC = () => {
   return (
      <Sheet>
         <SheetTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2">
+          <Button variant="default" className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
             Chat with Fermentia
           </Button>
         </SheetTrigger>
         <SheetContent className="w-[400px] sm:w-[540px] bg-background p-0">
-          <SheetHeader className="p-6">
+          <SheetHeader className="p-6 border-b border-border">
             <SheetTitle className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-primary"/>
-              Fermentia
+              <span>Fermentia, your vineyard AI expert</span>
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col h-[calc(100%-76px)]">
             <ScrollArea className="flex-1 p-6">
               <div className="space-y-4">
                  {messages.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8">
-                    <p>Ask me anything about your vineyards!</p>
-                    <p className="text-xs">e.g., "Any pest alerts this week?" or "Advice on pruning Chardonnay?"</p>
+                  <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
+                    <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
+                    <h3 className="font-semibold text-lg text-foreground mb-2">Welcome to Fermentia!</h3>
+                    <p className="text-sm">Ask me anything about your vineyards!</p>
+                    <p className="text-xs mt-2">e.g., "Any pest alerts this week?" or "Advice on pruning Chardonnay?"</p>
                   </div>
                 )}
                 {messages.map((message) => (
@@ -163,7 +166,7 @@ const ChatPanel: React.FC = () => {
                     }`}
                   >
                     {message.role === "assistant" && (
-                      <Avatar className="h-8 w-8">
+                      <Avatar className="h-8 w-8 border-2 border-primary">
                         <AvatarFallback className="bg-primary text-primary-foreground">
                           <Bot />
                         </AvatarFallback>
@@ -189,7 +192,7 @@ const ChatPanel: React.FC = () => {
                 ))}
                 {isLoading && (
                   <div className="flex items-start gap-3">
-                     <Avatar className="h-8 w-8">
+                     <Avatar className="h-8 w-8 border-2 border-primary">
                         <AvatarFallback className="bg-primary text-primary-foreground">
                           <Bot />
                         </AvatarFallback>
@@ -201,13 +204,13 @@ const ChatPanel: React.FC = () => {
                 )}
               </div>
             </ScrollArea>
-            <div className="p-4 border-t border-border">
+            <div className="p-4 border-t border-border bg-background">
               <form onSubmit={handleSendMessage} className="relative">
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask Fermentia..."
-                  className="pr-12"
+                  className="pr-12 bg-muted focus:bg-background"
                   disabled={isLoading}
                 />
                 <Button
@@ -236,7 +239,7 @@ export default function DashboardPage() {
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-2 p-2">
-              <Dot className="h-8 w-8 text-primary" />
+              <Wine className="h-8 w-8 text-primary" />
               <h1 className="font-bold text-lg">Vineyard AI</h1>
             </div>
           </SidebarHeader>
@@ -244,7 +247,7 @@ export default function DashboardPage() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton isActive>
-                  <Dot />
+                  <Wine />
                   Vineyard AI
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -269,7 +272,7 @@ export default function DashboardPage() {
                 <span className="sr-only">Notifications</span>
               </Button>
               <Avatar className="h-9 w-9">
-                <AvatarImage src="https://placehold.co/40x40.png" alt="@user" />
+                <AvatarImage src="https://placehold.co/40x40.png" alt="@user" data-ai-hint="person avatar"/>
                 <AvatarFallback>U</AvatarFallback>
               </Avatar>
             </div>
