@@ -43,64 +43,28 @@ import type { Vineyard, Message } from "@/types";
 import { chatWithFermentia } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-const initialVineyards: Vineyard[] = [
-  {
-    id: "1",
-    name: "Oak Ridge Estate",
-    location: "Napa Valley, California",
-    grapeVarietals: "Cabernet Sauvignon, Merlot",
-    totalPlots: 12,
-    iotData: {
-      pests: false,
-    },
-    imageUrl: "https://placehold.co/300x200.png",
-    imageHint: "vineyard aerial"
-  },
-  {
-    id: "2",
-    name: "Willow Creek Vineyards",
-    location: "Burgundy, France",
-    grapeVarietals: "Chardonnay, Pinot Noir",
-    totalPlots: 8,
-     iotData: {
-      pests: true,
-    },
-    imageUrl: "https://placehold.co/300x200.png",
-    imageHint: "grapes vine"
-  },
-  {
-    id: "3",
-    name: "Sunset Valley Farms",
-    location: "Tuscany, Italy",
-    grapeVarietals: "Zinfandel, Syrah",
-    totalPlots: 15,
-     iotData: {
-      pests: false,
-    },
-    imageUrl: "https://placehold.co/300x200.png",
-    imageHint: "vineyard sunset"
-  },
-];
+import { initialVineyards } from "@/lib/data";
 
 const VineyardCard: React.FC<{ vineyard: Vineyard }> = ({ vineyard }) => (
   <Card className="bg-card border-border/50 overflow-hidden">
-    <CardContent className="p-0 flex items-center gap-4">
-      <div className="p-4 flex-1">
+    <CardContent className="p-0 flex items-stretch">
+      <div className="flex-shrink-0 w-[150px] md:w-[200px]">
+         <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
+      </div>
+      <div className="p-4 flex-1 flex flex-col justify-center">
         <h3 className="font-bold text-lg">{vineyard.name}</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          {vineyard.location}
+        </p>
         <p className="text-sm text-muted-foreground">
-          Total Plots: {vineyard.totalPlots}, Grape Varieties: {vineyard.grapeVarietals}
+          Plots: {vineyard.totalPlots} | Grapes: {vineyard.grapeVarietals}
         </p>
          {vineyard.iotData.pests && (
-            <Badge variant="destructive" className="mt-2">
+            <Badge variant="destructive" className="mt-2 w-fit">
               <AlertTriangle className="mr-1 h-3 w-3" />
               Pest Alert
             </Badge>
           )}
-        <Button variant="outline" size="sm" className="mt-4">View Details</Button>
-      </div>
-      <div className="flex-shrink-0">
-         <img src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} className="w-[200px] h-full object-cover" />
       </div>
     </CardContent>
   </Card>
@@ -125,6 +89,7 @@ const ChatPanel: React.FC = () => {
       const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
+       console.error(error);
        const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again later." };
        setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -154,8 +119,8 @@ const ChatPanel: React.FC = () => {
                   <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
                     <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
                     <h3 className="font-semibold text-lg text-foreground mb-2">Welcome to Fermentia!</h3>
-                    <p className="text-sm">Ask me anything about your vineyards!</p>
-                    <p className="text-xs mt-2">e.g., "Any pest alerts this week?" or "Advice on pruning Chardonnay?"</p>
+                    <p className="text-sm">Ask me about your vineyards!</p>
+                    <p className="text-xs mt-2">e.g., "Any pest alerts this week?" or "Give me a summary for Oak Ridge Estate."</p>
                   </div>
                 )}
                 {messages.map((message) => (
@@ -289,28 +254,22 @@ export default function DashboardPage() {
                 <ChatPanel />
               </div>
               
-              <div className="space-y-6">
-                <h2 className="text-2xl font-bold">Vineyard Summary</h2>
-                <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-4">
+                <h2 className="text-2xl font-semibold">Vineyard Summary</h2>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {vineyards.map((vineyard) => (
                     <VineyardCard key={vineyard.id} vineyard={vineyard} />
                   ))}
                 </div>
               </div>
 
-              <div className="space-y-6">
-                <h2 className="text-2xl font-bold">Map View</h2>
+              <div className="space-y-4">
+                <h2 className="text-2xl font-semibold">Map View</h2>
                 <Card className="overflow-hidden">
                   <Image src="https://placehold.co/1200x500.png" data-ai-hint="map" width={1200} height={500} alt="Map of vineyards" className="w-full object-cover"/>
                 </Card>
               </div>
 
-              <div className="space-y-6">
-                <h2 className="text-2xl font-bold">Alert Summary</h2>
-                 <Card className="overflow-hidden">
-                  <Image src="https://placehold.co/1200x500.png" data-ai-hint="vineyard field" width={1200} height={500} alt="Vineyard with an alert" className="w-full object-cover"/>
-                </Card>
-              </div>
             </div>
           </main>
         </SidebarInset>

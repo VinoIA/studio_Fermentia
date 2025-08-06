@@ -13,6 +13,6 @@ export type Vineyard = {
 
 export type Message = {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
 };
