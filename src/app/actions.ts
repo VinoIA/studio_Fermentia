@@ -1,28 +1,24 @@
 "use server";
 
-import {
-  generateVineyardDescription,
-  type GenerateVineyardDescriptionInput,
-  type GenerateVineyardDescriptionOutput,
-} from "@/ai/flows/generate-vineyard-description";
 import { z } from "zod";
+import { chatWithFermentia as chatWithFermentiaFlow } from "@/ai/flows/fermentia-chat-flow";
+import type { Message } from "@/types";
 
-const actionSchema = z.object({
-  name: z.string(),
-  location: z.string(),
-  grapeVarietals: z.string(),
-  notableWines: z.string().optional(),
+const chatSchema = z.object({
+  history: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })),
+  message: z.string(),
 });
 
-export async function generateDescriptionAction(
-  input: GenerateVineyardDescriptionInput
-): Promise<GenerateVineyardDescriptionOutput> {
-  const validatedInput = actionSchema.parse(input);
+export async function chatWithFermentia(history: Message[], message: string) {
+  const validatedInput = chatSchema.parse({ history, message });
   try {
-    const output = await generateVineyardDescription(validatedInput);
-    return output;
+    const output = await chatWithFermentiaFlow(validatedInput.history, validatedInput.message);
+    return { text: output.text };
   } catch (error) {
-    console.error("Error generating vineyard description:", error);
-    throw new Error("Failed to generate description");
+    console.error("Error chatting with Fermentia:", error);
+    throw new Error("Failed to get response from Fermentia");
   }
 }

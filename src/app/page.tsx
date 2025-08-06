@@ -1,252 +1,317 @@
 "use client";
 
-import { useState, useMemo, type FC } from "react";
-import { Plus, Search, Grape, Wine, Pencil, Trash2, MapPin } from "lucide-react";
+import { useState } from "react";
+import Image from 'next/image';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
+import {
+  Bot,
+  CircleUser,
+  Search,
+  Bell,
+  ChevronDown,
+  Dot,
+  Send,
+  LoaderCircle,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
-import type { Vineyard } from "@/types";
-import { VineyardForm } from "@/components/vineyard-form";
+  Sidebar,
+  SidebarProvider,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarHeader,
+  SidebarContent,
+  SidebarInset,
+} from "@/components/ui/sidebar";
+import type { Vineyard, Message } from "@/types";
+import { chatWithFermentia } from "@/app/actions";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const initialVineyards: Vineyard[] = [
   {
     id: "1",
-    name: "Napa Valley Sunsets",
+    name: "Oak Ridge Estate",
     location: "Napa Valley, California",
-    grapeVarietals: "Cabernet Sauvignon, Chardonnay, Merlot",
-    notableWines: "2018 Reserve Cabernet Sauvignon",
-    description: "Nestled in the heart of Napa Valley, our vineyard boasts sun-drenched slopes perfect for cultivating world-class Cabernet Sauvignon. Experience the rich flavors and breathtaking sunsets that make our wines unforgettable.",
-    imageUrl: "https://placehold.co/600x400.png",
-    imageHint: "vineyard sunset"
+    grapeVarietals: "Cabernet Sauvignon, Merlot",
+    totalPlots: 12,
+    iotData: {
+      pests: false,
+    },
+    imageUrl: "https://placehold.co/300x200.png",
+    imageHint: "vineyard aerial"
   },
   {
     id: "2",
-    name: "Domaine de la Romanée-Conti",
+    name: "Willow Creek Vineyards",
     location: "Burgundy, France",
-    grapeVarietals: "Pinot Noir",
-    notableWines: "Romanée-Conti Grand Cru",
-    description: "An iconic estate in Burgundy, Domaine de la Romanée-Conti is synonymous with the world's finest Pinot Noir. Its mythical grand cru, Romanée-Conti, is one of the most sought-after wines globally, a testament to its exceptional terroir and meticulous winemaking.",
-    imageUrl: "https://placehold.co/600x400.png",
-    imageHint: "burgundy chateau"
+    grapeVarietals: "Chardonnay, Pinot Noir",
+    totalPlots: 8,
+     iotData: {
+      pests: true,
+    },
+    imageUrl: "https://placehold.co/300x200.png",
+    imageHint: "grapes vine"
   },
   {
     id: "3",
-    name: "Tuscan Hills Estate",
+    name: "Sunset Valley Farms",
     location: "Tuscany, Italy",
-    grapeVarietals: "Sangiovese, Merlot",
-    notableWines: "Chianti Classico Riserva",
-    description: "Overlooking the rolling hills of Tuscany, our estate is dedicated to producing exceptional Sangiovese. Our Chianti Classico Riserva embodies the spirit of Italy with its rustic charm and elegant structure.",
-    imageUrl: "https://placehold.co/600x400.png",
-    imageHint: "tuscan hills"
+    grapeVarietals: "Zinfandel, Syrah",
+    totalPlots: 15,
+     iotData: {
+      pests: false,
+    },
+    imageUrl: "https://placehold.co/300x200.png",
+    imageHint: "vineyard sunset"
   },
 ];
 
-const Logo: FC = () => (
-  <div className="flex items-center gap-2">
-    <div className="relative">
-      <Wine className="h-8 w-8 text-primary" />
-      <Grape className="absolute -bottom-1 -right-2 h-5 w-5 text-accent" />
-    </div>
-    <h1 className="text-2xl font-headline font-bold tracking-tight">
-      Elixir Line
-    </h1>
-  </div>
+const VineyardCard: React.FC<{ vineyard: Vineyard }> = ({ vineyard }) => (
+  <Card className="bg-card border-border/50 overflow-hidden">
+    <CardContent className="p-0 flex items-center gap-4">
+      <div className="p-4 flex-1">
+        <h3 className="font-bold text-lg">{vineyard.name}</h3>
+        <p className="text-sm text-muted-foreground">
+          Total Plots: {vineyard.totalPlots}, Grape Varieties: {vineyard.grapeVarietals}
+        </p>
+         {vineyard.iotData.pests && (
+            <Badge variant="destructive" className="mt-2">
+              <AlertTriangle className="mr-1 h-3 w-3" />
+              Pest Alert
+            </Badge>
+          )}
+        <Button variant="outline" size="sm" className="mt-4">View Details</Button>
+      </div>
+      <div className="flex-shrink-0">
+         <img src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} className="w-[200px] h-full object-cover" />
+      </div>
+    </CardContent>
+  </Card>
 );
 
-export default function Home() {
-  const [vineyards, setVineyards] = useState<Vineyard[]>(initialVineyards);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingVineyard, setEditingVineyard] = useState<Vineyard | null>(null);
-  const [deletingVineyard, setDeletingVineyard] = useState<Vineyard | null>(null);
+const ChatPanel: React.FC = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const { toast } = useToast();
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
-  const filteredVineyards = useMemo(() =>
-    vineyards.filter((v) =>
-      v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.grapeVarietals.toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-    [vineyards, searchTerm]
-  );
+    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input };
+    setMessages(prev => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
-  const handleAddNew = () => {
-    setEditingVineyard(null);
-    setIsFormOpen(true);
-  };
-
-  const handleEdit = (vineyard: Vineyard) => {
-    setEditingVineyard(vineyard);
-    setIsFormOpen(true);
-  };
-
-  const handleDeleteConfirm = (vineyard: Vineyard) => {
-    setDeletingVineyard(vineyard);
-  };
-
-  const handleDelete = () => {
-    if (!deletingVineyard) return;
-    setVineyards((prev) => prev.filter((v) => v.id !== deletingVineyard.id));
-    toast({
-      title: "Vineyard Deleted",
-      description: `"${deletingVineyard.name}" has been removed.`,
-    });
-    setDeletingVineyard(null);
-  };
-
-  const handleFormSubmit = (data: Omit<Vineyard, "id" | "imageUrl" | "imageHint">, id?: string) => {
-    if (id) {
-      // Update
-      const updatedVineyard: Vineyard = { ...vineyards.find(v => v.id === id)!, ...data };
-      setVineyards((prev) => prev.map((v) => (v.id === id ? updatedVineyard : v)));
-      toast({
-        title: "Vineyard Updated",
-        description: `"${data.name}" has been successfully updated.`,
-      });
-    } else {
-      // Create
-      const newVineyard: Vineyard = {
-        id: Date.now().toString(),
-        ...data,
-        imageUrl: `https://placehold.co/600x400.png`,
-        imageHint: "vineyard landscape"
-      };
-      setVineyards((prev) => [newVineyard, ...prev]);
-      toast({
-        title: "Vineyard Created",
-        description: `"${data.name}" has been successfully added.`,
-      });
+    try {
+      const response = await chatWithFermentia(messages, userMessage.content);
+      const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+       const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: "Sorry, I'm having trouble connecting. Please try again later." };
+       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-    setIsFormOpen(false);
-    setEditingVineyard(null);
   };
-  
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Logo />
-          <Button onClick={handleAddNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Vineyard
+     <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="ghost" className="flex items-center gap-2">
+            <Bot className="h-5 w-5" />
+            Chat with Fermentia
           </Button>
-        </div>
-      </header>
-
-      <main className="flex-1 container mx-auto p-4 md:p-8">
-        <div className="mb-8 space-y-4">
-          <h2 className="text-3xl font-headline font-bold tracking-tight">
-            Vineyard Explorer
-          </h2>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, location, or grape..."
-              className="pl-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        {filteredVineyards.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredVineyards.map((vineyard) => (
-              <Card key={vineyard.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
-                <img src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} className="w-full h-48 object-cover" />
-                <CardHeader>
-                  <CardTitle className="font-headline">{vineyard.name}</CardTitle>
-                  <CardDescription className="flex items-center gap-1.5 pt-1">
-                    <MapPin className="h-4 w-4 text-accent" /> {vineyard.location}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-grow space-y-4">
-                  <p className="text-sm">{vineyard.description}</p>
-                  <div>
-                    <h4 className="font-bold text-sm mb-1">Grape Varietals:</h4>
-                    <p className="text-sm text-muted-foreground">{vineyard.grapeVarietals}</p>
+        </SheetTrigger>
+        <SheetContent className="w-[400px] sm:w-[540px] bg-background p-0">
+          <SheetHeader className="p-6">
+            <SheetTitle className="flex items-center gap-2">
+              <Bot className="h-6 w-6 text-primary"/>
+              Fermentia
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col h-[calc(100%-76px)]">
+            <ScrollArea className="flex-1 p-6">
+              <div className="space-y-4">
+                 {messages.length === 0 && (
+                  <div className="text-center text-muted-foreground py-8">
+                    <p>Ask me anything about your vineyards!</p>
+                    <p className="text-xs">e.g., "Any pest alerts this week?" or "Advice on pruning Chardonnay?"</p>
                   </div>
-                   {vineyard.notableWines && (
-                    <div>
-                      <h4 className="font-bold text-sm mb-1">Notable Wines:</h4>
-                      <p className="text-sm text-muted-foreground">{vineyard.notableWines}</p>
+                )}
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex items-start gap-3 ${
+                      message.role === "user" ? "justify-end" : ""
+                    }`}
+                  >
+                    {message.role === "assistant" && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          <Bot />
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div
+                      className={`max-w-[75%] rounded-lg p-3 text-sm ${
+                        message.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      }`}
+                    >
+                      {message.content}
                     </div>
-                  )}
-                </CardContent>
-                <CardFooter className="bg-muted/50 p-3 flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(vineyard)}>
-                    <Pencil className="mr-2 h-4 w-4" /> Edit
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleDeleteConfirm(vineyard)}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+                     {message.role === "user" && (
+                       <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          <CircleUser />
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex items-start gap-3">
+                     <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          <Bot />
+                        </AvatarFallback>
+                      </Avatar>
+                     <div className="bg-muted rounded-lg p-3 flex items-center">
+                        <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+                     </div>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+            <div className="p-4 border-t border-border">
+              <form onSubmit={handleSendMessage} className="relative">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask Fermentia..."
+                  className="pr-12"
+                  disabled={isLoading}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8"
+                  disabled={isLoading || !input.trim()}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
           </div>
-        ) : (
-          <div className="text-center py-16">
-            <h3 className="text-xl font-semibold">No Vineyards Found</h3>
-            <p className="text-muted-foreground mt-2">Try adjusting your search or add a new vineyard.</p>
-          </div>
-        )}
-      </main>
+        </SheetContent>
+      </Sheet>
+  )
+}
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle className="font-headline">
-              {editingVineyard ? "Edit Vineyard" : "Add New Vineyard"}
-            </DialogTitle>
-          </DialogHeader>
-          <VineyardForm
-            vineyardToEdit={editingVineyard}
-            onSubmit={handleFormSubmit}
-          />
-        </DialogContent>
-      </Dialog>
-      
-      <AlertDialog open={!!deletingVineyard} onOpenChange={() => setDeletingVineyard(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-headline">Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              vineyard "{deletingVineyard?.name}".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+
+export default function DashboardPage() {
+  const [vineyards] = useState<Vineyard[]>(initialVineyards);
+  
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <Sidebar>
+          <SidebarHeader>
+            <div className="flex items-center gap-2 p-2">
+              <Dot className="h-8 w-8 text-primary" />
+              <h1 className="font-bold text-lg">Vineyard AI</h1>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton isActive>
+                  <Dot />
+                  Vineyard AI
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarContent>
+        </Sidebar>
+        <SidebarInset>
+          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-6 backdrop-blur-md">
+            <div className="flex items-center gap-4">
+                {/* Search input can be added here if needed */}
+            </div>
+            <div className="flex items-center gap-4">
+               <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search"
+                  className="bg-muted pl-10"
+                />
+              </div>
+              <Button variant="ghost" size="icon">
+                <Bell className="h-5 w-5" />
+                <span className="sr-only">Notifications</span>
+              </Button>
+              <Avatar className="h-9 w-9">
+                <AvatarImage src="https://placehold.co/40x40.png" alt="@user" />
+                <AvatarFallback>U</AvatarFallback>
+              </Avatar>
+            </div>
+          </header>
+          <main className="flex-1 p-6">
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold">Vineyard Overview</h1>
+                  <p className="text-muted-foreground">
+                    Monitor the health and status of your vineyards in real-time.
+                  </p>
+                </div>
+                <ChatPanel />
+              </div>
+              
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold">Vineyard Summary</h2>
+                <div className="grid grid-cols-1 gap-6">
+                  {vineyards.map((vineyard) => (
+                    <VineyardCard key={vineyard.id} vineyard={vineyard} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold">Map View</h2>
+                <Card className="overflow-hidden">
+                  <Image src="https://placehold.co/1200x500.png" data-ai-hint="map" width={1200} height={500} alt="Map of vineyards" className="w-full object-cover"/>
+                </Card>
+              </div>
+
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold">Alert Summary</h2>
+                 <Card className="overflow-hidden">
+                  <Image src="https://placehold.co/1200x500.png" data-ai-hint="vineyard field" width={1200} height={500} alt="Vineyard with an alert" className="w-full object-cover"/>
+                </Card>
+              </div>
+            </div>
+          </main>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

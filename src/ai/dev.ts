@@ -1,4 +1,4 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/generate-vineyard-description.ts';
+import '@/ai/flows/fermentia-chat-flow.ts';
