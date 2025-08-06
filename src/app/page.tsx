@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -83,7 +84,7 @@ const ChatPanel: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const chatHistory = newMessages.filter(m => m.role !== 'tool');
+      const chatHistory = newMessages; // No filtrar, enviar todo el historial
       const response = await chatWithFermentia(chatHistory, userMessage.content);
       const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMessage]);
@@ -277,5 +278,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
