@@ -1,8 +1,95 @@
-// src/lib/data.ts
+import type { Vineyard, HarvestPrediction, Plot } from "@/types";
 
-import type { Vineyard, HarvestPrediction } from "@/types";
+// Función para generar datos de una parcela individual
+function generatePlotData(
+  plotNumber: number, 
+  vineyardVarietals: string, 
+  vineyardLocation: string,
+  totalPlots: number,
+  baseIoTData: any
+): Plot {
+  // Calcular día del año
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now.getTime() - start.getTime();
+  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+  
+  // Componentes estacionales
+  const sin_day = Math.sin(2 * Math.PI * dayOfYear / 365);
+  const cos_day = Math.cos(2 * Math.PI * dayOfYear / 365);
+  
+  // Generar variación por parcela (cada parcela es ligeramente diferente)
+  const variation = () => 0.8 + Math.random() * 0.4; // 0.8 a 1.2
+  const smallVariation = () => 0.95 + Math.random() * 0.1; // 0.95 a 1.05
+  
+  // Tipos de suelo variados
+  const soilTypes = ['Franco', 'Arcilloso', 'Arenoso', 'Franco-arenoso', 'Franco-arcilloso'];
+  const exposures = ['Norte', 'Sur', 'Este', 'Oeste', 'Noreste', 'Noroeste', 'Sureste', 'Suroeste'];
+  
+  // Año de plantación variado (últimos 5-25 años)
+  const plantingYear = 2024 - (5 + Math.floor(Math.random() * 20));
+  const vineAge = 2024 - plantingYear;
+  
+  // IoT data con variaciones por parcela
+  const plotIoTData = {
+    temp_mean_7d: baseIoTData.temp_mean_7d * variation(),
+    hr_max_3d: baseIoTData.hr_max_3d * smallVariation(),
+    soil_moist_mean_24h: baseIoTData.soil_moist_mean_24h * variation(),
+    ndvi_anom: baseIoTData.ndvi_anom + (Math.random() - 0.5) * 0.1,
+    evi_anom: baseIoTData.evi_anom + (Math.random() - 0.5) * 0.08,
+    sin_day,
+    cos_day,
+    variedad_onehot: baseIoTData.variedad_onehot,
+    // Datos específicos de parcela
+    soil_ph: 6.0 + Math.random() * 2.0, // pH 6.0 - 8.0
+    organic_matter: 1.5 + Math.random() * 3.5, // 1.5% - 5.0%
+    water_stress_index: Math.random() * 0.7, // 0 - 0.7
+  };
+  
+  // Generar predicciones para esta parcela específica
+  const brix_next_7d = brixRandomForest(plotIoTData);
+  const yield_final = yieldXGBoost({
+    ...plotIoTData,
+    surface_ha: baseIoTData.surface_ha / totalPlots // Área promedio por parcela
+  });
+  
+  // Fecha estimada de cosecha basada en °Brix
+  const daysToHarvest = Math.max(7, Math.round((24 - brix_next_7d) * 3));
+  const harvestDate = new Date();
+  harvestDate.setDate(harvestDate.getDate() + daysToHarvest);
+  
+  // Score de calidad basado en múltiples factores
+  const qualityScore = Math.min(100, Math.max(60, 
+    (brix_next_7d * 3) + 
+    (yield_final / 100) + 
+    ((8 - Math.abs(plotIoTData.soil_ph - 7)) * 5) +
+    ((5 - plotIoTData.organic_matter) * 3) +
+    ((1 - plotIoTData.water_stress_index) * 10)
+  ));
 
-// Función para generar datos simulados realistas
+  return {
+    id: `plot-${plotNumber}`,
+    plotNumber,
+    area_ha: parseFloat(((baseIoTData.surface_ha / totalPlots) * (0.8 + Math.random() * 0.4)).toFixed(2)),
+    soilType: soilTypes[Math.floor(Math.random() * soilTypes.length)],
+    slope: Math.round(Math.random() * 25), // 0-25 grados
+    exposure: exposures[Math.floor(Math.random() * exposures.length)],
+    plantingYear,
+    vineAge,
+    iotData: plotIoTData,
+    prediction: {
+      brix_next_7d,
+      yield_final,
+      confidence_brix: 0.75 + Math.random() * 0.2,
+      confidence_yield: 0.70 + Math.random() * 0.25,
+      harvest_recommendation: brix_next_7d >= 24 ? 'optimal' : brix_next_7d >= 22 ? 'harvest_soon' : 'wait',
+      expected_harvest_date: harvestDate.toISOString().split('T')[0],
+      quality_score: Math.round(qualityScore)
+    }
+  };
+}
+
+// Función para generar datos simulados realistas del viñedo
 function generateIoTData(varietals: string, location: string) {
   // Calcular día del año
   const now = new Date();
@@ -40,47 +127,74 @@ function generateIoTData(varietals: string, location: string) {
   };
 }
 
+// Función para generar viñedo completo con parcelas
+function generateVineyardWithPlots(
+  id: string,
+  name: string, 
+  location: string, 
+  grapeVarietals: string, 
+  totalPlots: number,
+  imageUrl: string,
+  imageHint: string
+): Vineyard {
+  const baseIoTData = generateIoTData(grapeVarietals, location);
+  
+  // Generar todas las parcelas
+  const plots: Plot[] = [];
+  for (let i = 1; i <= totalPlots; i++) {
+    plots.push(generatePlotData(i, grapeVarietals, location, totalPlots, baseIoTData));
+  }
+  
+  return {
+    id,
+    name,
+    location,
+    grapeVarietals,
+    totalPlots,
+    plots,
+    iotData: baseIoTData,
+    imageUrl,
+    imageHint
+  };
+}
+
 export const initialVineyards: Vineyard[] = [
-  {
-    id: "1",
-    name: "Finca Roble Alto",
-    location: "Valle de Napa, California",
-    grapeVarietals: "Cabernet Sauvignon, Merlot",
-    totalPlots: 12,
-    iotData: generateIoTData("Cabernet Sauvignon, Merlot", "Valle de Napa, California"),
-    imageUrl: "/imgs/1.jpg",
-    imageHint: "vineyard aerial"
-  },
-  {
-    id: "2",
-    name: "Viñedos Arroyo Sauce",
-    location: "Borgoña, Francia",
-    grapeVarietals: "Chardonnay, Pinot Noir",
-    totalPlots: 8,
-    iotData: generateIoTData("Chardonnay, Pinot Noir", "Borgoña, Francia"),
-    imageUrl: "/imgs/2.png",
-    imageHint: "grapes vine"
-  },
-  {
-    id: "3",
-    name: "Hacienda del Valle del Sol",
-    location: "Toscana, Italia",
-    grapeVarietals: "Zinfandel, Syrah",
-    totalPlots: 15,
-    iotData: generateIoTData("Zinfandel, Syrah", "Toscana, Italia"),
-    imageUrl: "/imgs/3.jpeg",
-    imageHint: "vineyard sunset"
-  },
-  {
-    id: "4",
-    name: "Vides de la Montaña Nublada",
-    location: "Sonoma, California",
-    grapeVarietals: "Sauvignon Blanc",
-    totalPlots: 10,
-    iotData: generateIoTData("Sauvignon Blanc", "Sonoma, California"),
-    imageUrl: "/imgs/4.png",
-    imageHint: "vineyard mountain"
-  },
+  generateVineyardWithPlots(
+    "1", 
+    "Finca Roble Alto", 
+    "Valle de Napa, California", 
+    "Cabernet Sauvignon, Merlot", 
+    12, 
+    "/imgs/1.jpg", 
+    "vineyard aerial"
+  ),
+  generateVineyardWithPlots(
+    "2", 
+    "Viñedos Arroyo Sauce", 
+    "Borgoña, Francia", 
+    "Chardonnay, Pinot Noir", 
+    8, 
+    "/imgs/2.png", 
+    "grapes vine"
+  ),
+  generateVineyardWithPlots(
+    "3", 
+    "Hacienda del Valle del Sol", 
+    "Toscana, Italia", 
+    "Zinfandel, Syrah", 
+    15, 
+    "/imgs/3.jpeg", 
+    "vineyard sunset"
+  ),
+  generateVineyardWithPlots(
+    "4", 
+    "Vides de la Montaña Nublada", 
+    "Sonoma, California", 
+    "Sauvignon Blanc", 
+    10, 
+    "/imgs/4.png", 
+    "vineyard mountain"
+  ),
 ];
 
 // Estado en memoria
@@ -95,24 +209,48 @@ export function getVineyardById(id: string) {
   return vineyardsDB.find(v => v.id === id);
 }
 
-export function addVineyard(vineyardData: Omit<Vineyard, 'id' | 'iotData'>) {
-  const newVineyard: Vineyard = {
-    ...vineyardData,
-    id: (vineyardsDB.length + 1).toString(),
-    iotData: generateIoTData(vineyardData.grapeVarietals, vineyardData.location),
-  };
+export function addVineyard(vineyardData: Omit<Vineyard, 'id' | 'iotData' | 'plots'>) {
+  const newVineyard = generateVineyardWithPlots(
+    (vineyardsDB.length + 1).toString(),
+    vineyardData.name,
+    vineyardData.location,
+    vineyardData.grapeVarietals,
+    vineyardData.totalPlots,
+    vineyardData.imageUrl,
+    vineyardData.imageHint
+  );
   vineyardsDB.push(newVineyard);
   return newVineyard;
+}
+
+/**
+ * Obtener datos específicos de una parcela
+ */
+export function getPlotById(vineyardId: string, plotNumber: number): Plot | null {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return null;
+  
+  return vineyard.plots.find(plot => plot.plotNumber === plotNumber) || null;
+}
+
+/**
+ * Obtener todas las parcelas de un viñedo
+ */
+export function getPlotsByVineyardId(vineyardId: string): Plot[] {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return [];
+  
+  return vineyard.plots;
 }
 
 // ============ ALGORITMOS DE PREDICCIÓN DE COSECHA ============
 
 /**
  * Simulación del modelo Random Forest para predicción de °Brix
- * Input: datos IoT del viñedo
+ * Input: datos IoT del viñedo o parcela
  * Output: °Brix previsto a 7 días
  */
-function brixRandomForest(iotData: Vineyard['iotData']): number {
+function brixRandomForest(iotData: any): number {
   const {
     temp_mean_7d,
     hr_max_3d,
@@ -121,7 +259,10 @@ function brixRandomForest(iotData: Vineyard['iotData']): number {
     evi_anom,
     sin_day,
     cos_day,
-    variedad_onehot
+    variedad_onehot,
+    soil_ph,
+    organic_matter,
+    water_stress_index
   } = iotData;
 
   // Simulación de Random Forest (pesos basados en importancia real de features)
@@ -151,6 +292,17 @@ function brixRandomForest(iotData: Vineyard['iotData']): number {
   
   brixPrediction += varietyContrib;
   
+  // Contribuciones específicas de parcela (si están disponibles)
+  if (soil_ph) {
+    brixPrediction += (soil_ph - 6.5) * 0.5; // pH óptimo alrededor de 6.5
+  }
+  if (organic_matter) {
+    brixPrediction += organic_matter * 0.3; // Más materia orgánica = mejor nutrición
+  }
+  if (water_stress_index !== undefined) {
+    brixPrediction += water_stress_index * 2; // Estrés hídrico moderado mejora °Brix
+  }
+  
   // Agregar algo de ruido para simular incertidumbre
   brixPrediction += (Math.random() - 0.5) * 2;
   
@@ -160,10 +312,10 @@ function brixRandomForest(iotData: Vineyard['iotData']): number {
 
 /**
  * Simulación del modelo XGBoost para predicción de rendimiento
- * Input: datos IoT del viñedo + superficie
+ * Input: datos IoT del viñedo o parcela + superficie
  * Output: rendimiento final kg/ha
  */
-function yieldXGBoost(iotData: Vineyard['iotData']): number {
+function yieldXGBoost(iotData: any): number {
   const {
     temp_mean_7d,
     hr_max_3d,
@@ -173,7 +325,10 @@ function yieldXGBoost(iotData: Vineyard['iotData']): number {
     sin_day,
     cos_day,
     variedad_onehot,
-    surface_ha
+    surface_ha,
+    soil_ph,
+    organic_matter,
+    water_stress_index
   } = iotData;
 
   // Simulación de XGBoost (gradient boosting)
@@ -204,8 +359,21 @@ function yieldXGBoost(iotData: Vineyard['iotData']): number {
   
   yieldPrediction += varietyYield;
   
-  // Efecto de escala (viñedos más grandes pueden tener ligeras eficiencias)
-  yieldPrediction += Math.log(surface_ha) * 100;
+  // Efecto de escala (parcelas más grandes pueden tener ligeras eficiencias)
+  if (surface_ha) {
+    yieldPrediction += Math.log(Math.max(0.1, surface_ha)) * 100;
+  }
+  
+  // Contribuciones específicas de parcela
+  if (soil_ph) {
+    yieldPrediction -= Math.abs(soil_ph - 6.8) * 200; // pH óptimo para rendimiento
+  }
+  if (organic_matter) {
+    yieldPrediction += organic_matter * 400; // Materia orgánica mejora rendimiento
+  }
+  if (water_stress_index !== undefined) {
+    yieldPrediction -= water_stress_index * 2000; // Estrés hídrico reduce rendimiento
+  }
   
   // Agregar ruido para simular incertidumbre
   yieldPrediction += (Math.random() - 0.5) * 1000;

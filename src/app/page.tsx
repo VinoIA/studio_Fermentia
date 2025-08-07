@@ -1,5 +1,3 @@
-// src/app/page.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -46,81 +44,83 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getVineyards, getHarvestPrediction } from "@/lib/data";
 
 const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction | null }> = ({ vineyard, prediction }) => (
-  <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300">
-    <CardContent className="p-0">
-      <div className="flex flex-col">
-        {/* Imagen y datos básicos */}
-        <div className="flex items-stretch">
-          <div className="flex-shrink-0 w-[150px] md:w-[200px]">
-            <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
-          </div>
-          <div className="p-4 flex-1 flex flex-col justify-center">
-            <h3 className="font-bold text-lg">{vineyard.name}</h3>
-            <p className="text-sm text-muted-foreground mb-2">
-              {vineyard.location}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
-            </p>
-            {vineyard.iotData.pests && (
-              <Badge variant="destructive" className="mt-2 w-fit">
-                <AlertTriangle className="mr-1 h-3 w-3" />
-                Alerta de Plaga
-              </Badge>
-            )}
-          </div>
-        </div>
-        
-        {/* Predicciones de cosecha */}
-        {prediction && (
-          <div className="p-4 bg-muted/20 border-t">
-            <div className="flex items-center gap-2 mb-3">
-              <Grape className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Predicciones de Cosecha</span>
+  <Link href={`/vineyards/${vineyard.id}`}>
+    <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300 cursor-pointer">
+      <CardContent className="p-0">
+        <div className="flex flex-col">
+          {/* Imagen y datos básicos */}
+          <div className="flex items-stretch">
+            <div className="flex-shrink-0 w-[150px] md:w-[200px]">
+              <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">°Brix (7 días)</span>
-                  <span className="text-sm font-semibold">{prediction.brix_next_7d}°</span>
+            <div className="p-4 flex-1 flex flex-col justify-center">
+              <h3 className="font-bold text-lg">{vineyard.name}</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                {vineyard.location}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
+              </p>
+              {vineyard.iotData.pests && (
+                <Badge variant="destructive" className="mt-2 w-fit">
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  Alerta de Plaga
+                </Badge>
+              )}
+            </div>
+          </div>
+          
+          {/* Predicciones de cosecha */}
+          {prediction && (
+            <div className="p-4 bg-muted/20 border-t">
+              <div className="flex items-center gap-2 mb-3">
+                <Grape className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Predicciones de Cosecha</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">°Brix (7 días)</span>
+                    <span className="text-sm font-semibold">{prediction.brix_next_7d}°</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Confianza</span>
+                    <span className="text-xs">{(prediction.confidence_brix * 100).toFixed(0)}%</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Confianza</span>
-                  <span className="text-xs">{(prediction.confidence_brix * 100).toFixed(0)}%</span>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Rendimiento</span>
+                    <span className="text-sm font-semibold">{prediction.yield_final.toLocaleString()} kg/ha</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Confianza</span>
+                    <span className="text-xs">{(prediction.confidence_yield * 100).toFixed(0)}%</span>
+                  </div>
                 </div>
               </div>
               
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Rendimiento</span>
-                  <span className="text-sm font-semibold">{prediction.yield_final.toLocaleString()} kg/ha</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Confianza</span>
-                  <span className="text-xs">{(prediction.confidence_yield * 100).toFixed(0)}%</span>
-                </div>
+              <div className="mt-3 flex justify-center">
+                <Badge 
+                  variant={
+                    prediction.harvest_recommendation === 'optimal' ? 'default' :
+                    prediction.harvest_recommendation === 'harvest_soon' ? 'secondary' : 'outline'
+                  }
+                  className="text-xs"
+                >
+                  <TrendingUp className="mr-1 h-3 w-3" />
+                  {prediction.harvest_recommendation === 'optimal' ? 'Cosecha Óptima' :
+                   prediction.harvest_recommendation === 'harvest_soon' ? 'Cosechar Pronto' : 'Esperar'}
+                </Badge>
               </div>
             </div>
-            
-            <div className="mt-3 flex justify-center">
-              <Badge 
-                variant={
-                  prediction.harvest_recommendation === 'optimal' ? 'default' :
-                  prediction.harvest_recommendation === 'harvest_soon' ? 'secondary' : 'outline'
-                }
-                className="text-xs"
-              >
-                <TrendingUp className="mr-1 h-3 w-3" />
-                {prediction.harvest_recommendation === 'optimal' ? 'Cosecha Óptima' :
-                 prediction.harvest_recommendation === 'harvest_soon' ? 'Cosechar Pronto' : 'Esperar'}
-              </Badge>
-            </div>
-          </div>
-        )}
-      </div>
-    </CardContent>
-  </Card>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  </Link>
 );
 
 const ChatPanel: React.FC = () => {

@@ -184,7 +184,7 @@ export const ai = genkit({
 
 'use server';
 /**
- * @fileOverview Fermentia, un experto en IA en viticultura.
+ * @fileOverview Fermentia, un experto en IA en viticultura con capacidades de predicción de cosecha.
  *
  * - chatWithFermentia - Una función para chatear con Fermentia.
  * - FermentiaChatInput - El tipo de entrada para la función de chat.
@@ -193,7 +193,7 @@ export const ai = genkit({
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getVineyardData } from '@/lib/data';
+import { getVineyardData, getHarvestPrediction, getAllHarvestPredictions, getPlotsByVineyardId, getVineyards } from '@/lib/data';
 
 const MessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'tool']),
@@ -226,6 +226,168 @@ const vineyardInfoTool = ai.defineTool(
   }
 );
 
+const harvestPredictionTool = ai.defineTool(
+  {
+    name: 'getHarvestPredictions',
+    description: 'Obtener predicciones de cosecha incluyendo °Brix, rendimiento y recomendaciones para un viñedo específico o todos los viñedos.',
+    inputSchema: z.object({
+      vineyardName: z.string().optional().describe('El nombre de un viñedo específico. Si no se proporciona, devuelve predicciones para todos.'),
+    }),
+    outputSchema: z.any(),
+  },
+  async (input) => {
+    if (input?.vineyardName) {
+      // Buscar el ID del viñedo por nombre
+      const vineyards = getVineyardData();
+      const vineyard = Array.isArray(vineyards) ? 
+        vineyards.find(v => v.nombre.toLowerCase().includes(input.vineyardName!.toLowerCase())) :
+        null;
+      
+      if (!vineyard) {
+        return { error: "Viñedo no encontrado para predicciones" };
+      }
+      
+      // Encontrar el ID real del viñedo
+      const allVineyards = getVineyardData();
+      const vineyardId = Array.isArray(allVineyards) ? 
+        allVineyards.findIndex(v => v.nombre === vineyard.nombre) + 1 : 
+        null;
+      
+      if (!vineyardId) {
+        return { error: "No se pudo obtener ID del viñedo" };
+      }
+      
+      const prediction = getHarvestPrediction(vineyardId.toString());
+      return {
+        viñedo: vineyard.nombre,
+        prediccion: prediction
+      };
+    } else {
+      // Devolver todas las predicciones
+      const allPredictions = getAllHarvestPredictions();
+      const vineyardData = getVineyardData();
+      
+      if (!Array.isArray(vineyardData)) {
+        return { error: "Error al obtener datos de viñedos" };
+      }
+      
+      return vineyardData.map((v, index) => ({
+        nombre: v.nombre,
+        ubicacion: v.ubicacion,
+        prediccion_brix: allPredictions[(index + 1).toString()]?.brix_next_7d,
+        prediccion_rendimiento: allPredictions[(index + 1).toString()]?.yield_final,
+        recomendacion: allPredictions[(index + 1).toString()]?.harvest_recommendation,
+        confianza_brix: allPredictions[(index + 1).toString()]?.confidence_brix,
+        confianza_rendimiento: allPredictions[(index + 1).toString()]?.confidence_yield
+      }));
+    }
+  }
+);
+
+const plotDetailsTool = ai.defineTool(
+  {
+    name: 'getPlotDetails',
+    description: 'Obtener detalles específicos de las parcelas de un viñedo, incluyendo métricas individuales de °Brix, rendimiento y condiciones de cada parcela.',
+    inputSchema: z.object({
+      vineyardName: z.string().describe('El nombre del viñedo para obtener detalles de sus parcelas.'),
+    }),
+    outputSchema: z.any(),
+  },
+  async (input) => {
+    if (!input.vineyardName) {
+      return { error: "Nombre de viñedo requerido" };
+    }
+    
+    // Buscar el viñedo por nombre
+    const vineyards = getVineyards();
+    const vineyard = vineyards.find(v => v.name.toLowerCase().includes(input.vineyardName.toLowerCase()));
+    
+    if (!vineyard) {
+      return { error: "Viñedo no encontrado" };
+    }
+    
+    // Obtener todas las parcelas
+    const plots = getPlotsByVineyardId(vineyard.id);
+    
+    return {
+      viñedo: vineyard.name,
+      ubicacion: vineyard.location,
+      total_parcelas: vineyard.totalPlots,
+      parcelas: plots.map(plot => ({
+        numero: plot.plotNumber,
+        area_ha: plot.area_ha,
+        tipo_suelo: plot.soilType,
+        edad_vides: plot.vineAge,
+        exposicion: plot.exposure,
+        prediccion_brix: plot.prediction.brix_next_7d,
+        rendimiento_esperado: plot.prediction.yield_final,
+        calidad_score: plot.prediction.quality_score,
+        recomendacion_cosecha: plot.prediction.harvest_recommendation,
+        fecha_cosecha_estimada: plot.prediction.expected_harvest_date,
+        ph_suelo: plot.iotData.soil_ph.toFixed(1),
+        materia_organica: plot.iotData.organic_matter.toFixed(1),
+        indice_estres_hidrico: plot.iotData.water_stress_index.toFixed(2)
+      }))
+    };
+  }
+);
+  {
+    name: 'getHarvestPredictions',
+    description: 'Obtener predicciones de cosecha incluyendo Brix, rendimiento y recomendaciones para un viñedo específico o todos los viñedos.',
+    inputSchema: z.object({
+      vineyardName: z.string().optional().describe('El nombre de un viñedo específico. Si no se proporciona, devuelve predicciones para todos.'),
+    }),
+    outputSchema: z.any(),
+  }
+  async (input) => {
+    if (input?.vineyardName) {
+      // Buscar el ID del viñedo por nombre
+      const vineyards = getVineyardData();
+      const vineyard = Array.isArray(vineyards) ? 
+        vineyards.find(v => v.nombre.toLowerCase().includes(input.vineyardName!.toLowerCase())) :
+        null;
+      
+      if (!vineyard) {
+        return { error: "Viñedo no encontrado para predicciones" };
+      }
+      
+      // Encontrar el ID real del viñedo
+      const allVineyards = getVineyardData();
+      const vineyardId = Array.isArray(allVineyards) ? 
+        allVineyards.findIndex(v => v.nombre === vineyard.nombre) + 1 : 
+        null;
+      
+      if (!vineyardId) {
+        return { error: "No se pudo obtener ID del viñedo" };
+      }
+      
+      const prediction = getHarvestPrediction(vineyardId.toString());
+      return {
+        viñedo: vineyard.nombre,
+        prediccion: prediction
+      };
+    } else {
+      // Devolver todas las predicciones
+      const allPredictions = getAllHarvestPredictions();
+      const vineyardData = getVineyardData();
+      
+      if (!Array.isArray(vineyardData)) {
+        return { error: "Error al obtener datos de viñedos" };
+      }
+      
+      return vineyardData.map((v, index) => ({
+        nombre: v.nombre,
+        ubicacion: v.ubicacion,
+        prediccion_brix: allPredictions[(index + 1).toString()]?.brix_next_7d,
+        prediccion_rendimiento: allPredictions[(index + 1).toString()]?.yield_final,
+        recomendacion: allPredictions[(index + 1).toString()]?.harvest_recommendation,
+        confianza_brix: allPredictions[(index + 1).toString()]?.confidence_brix,
+        confianza_rendimiento: allPredictions[(index + 1).toString()]?.confidence_yield
+      }));
+    }
+  }
+);
+
 
 // Función de chat simple y no transmitida por streaming
 export async function chatWithFermentia(history: z.infer<typeof MessageSchema>[], message: string): Promise<FermentiaChatOutput> {
@@ -248,21 +410,43 @@ const fermentiaChatFlow = ai.defineFlow(
 
     const response = await ai.generate({
       model: 'googleai/gemini-2.0-flash',
-      tools: [vineyardInfoTool],
-      system: `Eres Fermentia, un asistente experto en IA especializado en viticultura (cultivo de viñedos). Tu función es proporcionar consejos expertos, responder preguntas y ofrecer sugerencias relacionadas con el cultivo de uvas y la gestión de viñedos.
+      tools: [vineyardInfoTool, harvestPredictionTool, plotDetailsTool],
+      system: `Eres Fermentia, un asistente experto en IA especializado en viticultura (cultivo de viñedos) y predicción de cosechas. Tu función es proporcionar consejos expertos, responder preguntas y ofrecer sugerencias relacionadas con el cultivo de uvas, la gestión de viñedos y las predicciones de cosecha.
 
 Habla siempre en español.
 
-Tienes acceso a datos en tiempo real de los viñedos del usuario. Utiliza la herramienta getVineyardInfo para responder preguntas sobre el estado de las plagas, resúmenes de viñedos o cualquier otra consulta relacionada con los datos.
+Tienes acceso a:
+1. Datos en tiempo real de los viñedos del usuario (getVineyardInfo)
+2. Predicciones de cosecha basadas en algoritmos de Machine Learning:
+   - Modelo Random Forest para predicción de °Brix a 7 días
+   - Modelo XGBoost para predicción de rendimiento final (kg/ha)
+   - Recomendaciones de cosecha basadas en las predicciones
+3. Detalles específicos de parcelas individuales (getPlotDetails):
+   - Métricas individuales por parcela (°Brix, rendimiento, calidad)
+   - Características del suelo (pH, materia orgánica, tipo)
+   - Condiciones específicas (edad de vides, exposición)
+   - Índices de estrés hídrico por parcela
 
-Sé amable, conocedor y servicial.`,
+Cuando te pregunten sobre predicciones de cosecha, utiliza la herramienta getHarvestPredictions. 
+Cuando necesites información detallada sobre parcelas específicas, usa getPlotDetails.
+Cuando te pregunten sobre un viñedo en general, usa getVineyardInfo.
+Las herramientas pueden proporcionar:
+- °Brix previsto a 7 días
+- Rendimiento esperado en kg/ha
+- Nivel de confianza de las predicciones
+- Recomendaciones de cosecha (optimal, harvest_soon, wait)
+- Detalles individuales de cada parcela
+- Análisis comparativo entre parcelas
+
+Explica los resultados de manera clara y proporciona contexto sobre lo que significan los valores de °Brix y rendimiento para la calidad del vino y la planificación de la cosecha. Cuando hables de parcelas específicas, menciona las diferencias entre ellas y qué factores pueden estar influyendo en sus métricas.
+
+Sé amable, conocedor y servicial. Si no tienes información específica, utiliza las herramientas disponibles para obtener los datos más actualizados.`,
       prompt: conversationContext,
     });
 
     return { text: response.text };
   }
 );
-
 
 # === Nombre : actions.ts
 # === Ruta   : src\app\actions.ts
@@ -319,7 +503,6 @@ export async function chatWithFermentia(history: Message[], message: string) {
   }
 }
 
-
 const vineyardSchema = z.object({
     name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
     location: z.string().min(3, "La ubicación debe tener al menos 3 caracteres."),
@@ -362,7 +545,6 @@ export async function addVineyard(prevState: any, formData: FormData) {
     revalidatePath('/');
     redirect('/vineyards');
 }
-
 
 # === Nombre : globals.css
 # === Ruta   : src\app\globals.css
@@ -486,10 +668,9 @@ export default function RootLayout({
 # === Ruta   : src\app\page.tsx
 # ==============================================
 
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -505,10 +686,12 @@ import {
   LoaderCircle,
   AlertTriangle,
   PlusCircle,
+  TrendingUp,
+  Grape,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Sheet,
   SheetContent,
@@ -524,35 +707,90 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { Vineyard, Message } from "@/types";
+import type { Vineyard, Message, HarvestPrediction } from "@/types";
 import { chatWithFermentia } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getVineyards } from "@/lib/data";
+import { getVineyards, getHarvestPrediction } from "@/lib/data";
 
-const VineyardCard: React.FC<{ vineyard: Vineyard }> = ({ vineyard }) => (
-  <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300">
-    <CardContent className="p-0 flex items-stretch">
-      <div className="flex-shrink-0 w-[150px] md:w-[200px]">
-         <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
-      </div>
-      <div className="p-4 flex-1 flex flex-col justify-center">
-        <h3 className="font-bold text-lg">{vineyard.name}</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          {vineyard.location}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
-        </p>
-         {vineyard.iotData.pests && (
-            <Badge variant="destructive" className="mt-2 w-fit">
-              <AlertTriangle className="mr-1 h-3 w-3" />
-              Alerta de Plaga
-            </Badge>
+const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction | null }> = ({ vineyard, prediction }) => (
+  <Link href={`/vineyards/${vineyard.id}`}>
+    <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300 cursor-pointer">
+      <CardContent className="p-0">
+        <div className="flex flex-col">
+          {/* Imagen y datos básicos */}
+          <div className="flex items-stretch">
+            <div className="flex-shrink-0 w-[150px] md:w-[200px]">
+              <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
+            </div>
+            <div className="p-4 flex-1 flex flex-col justify-center">
+              <h3 className="font-bold text-lg">{vineyard.name}</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                {vineyard.location}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
+              </p>
+              {vineyard.iotData.pests && (
+                <Badge variant="destructive" className="mt-2 w-fit">
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  Alerta de Plaga
+                </Badge>
+              )}
+            </div>
+          </div>
+          
+          {/* Predicciones de cosecha */}
+          {prediction && (
+            <div className="p-4 bg-muted/20 border-t">
+              <div className="flex items-center gap-2 mb-3">
+                <Grape className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Predicciones de Cosecha</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">°Brix (7 días)</span>
+                    <span className="text-sm font-semibold">{prediction.brix_next_7d}°</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Confianza</span>
+                    <span className="text-xs">{(prediction.confidence_brix * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Rendimiento</span>
+                    <span className="text-sm font-semibold">{prediction.yield_final.toLocaleString()} kg/ha</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Confianza</span>
+                    <span className="text-xs">{(prediction.confidence_yield * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-3 flex justify-center">
+                <Badge 
+                  variant={
+                    prediction.harvest_recommendation === 'optimal' ? 'default' :
+                    prediction.harvest_recommendation === 'harvest_soon' ? 'secondary' : 'outline'
+                  }
+                  className="text-xs"
+                >
+                  <TrendingUp className="mr-1 h-3 w-3" />
+                  {prediction.harvest_recommendation === 'optimal' ? 'Cosecha Óptima' :
+                   prediction.harvest_recommendation === 'harvest_soon' ? 'Cosechar Pronto' : 'Esperar'}
+                </Badge>
+              </div>
+            </div>
           )}
-      </div>
-    </CardContent>
-  </Card>
+        </div>
+      </CardContent>
+    </Card>
+  </Link>
 );
 
 const ChatPanel: React.FC = () => {
@@ -572,7 +810,7 @@ const ChatPanel: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const chatHistory = newMessages; // No filtrar, enviar todo el historial
+      const chatHistory = newMessages;
       const response = await chatWithFermentia(chatHistory, userMessage.content);
       const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMessage]);
@@ -607,8 +845,8 @@ const ChatPanel: React.FC = () => {
                   <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
                     <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
                     <h3 className="font-semibold text-lg text-foreground mb-2">¡Bienvenido a Fermentia!</h3>
-                    <p className="text-sm">¡Pregúntame sobre tus viñedos!</p>
-                    <p className="text-xs mt-2">ej: "¿Hay alertas de plagas?" o "Resumen de Finca Roble Alto."</p>
+                    <p className="text-sm">¡Pregúntame sobre tus viñedos y predicciones de cosecha!</p>
+                    <p className="text-xs mt-2">ej: "¿Cuáles son las predicciones de °Brix?" o "¿Cuándo cosechar Finca Roble Alto?"</p>
                   </div>
                 )}
                 {messages.map((message) => (
@@ -727,9 +965,22 @@ const Header: React.FC = () => (
     </header>
 );
 
-
 export default function DashboardPage() {
   const [vineyards] = useState<Vineyard[]>(getVineyards());
+  const [predictions, setPredictions] = useState<{ [key: string]: HarvestPrediction | null }>({});
+  
+  useEffect(() => {
+    // Cargar predicciones para todos los viñedos
+    const loadPredictions = () => {
+      const newPredictions: { [key: string]: HarvestPrediction | null } = {};
+      vineyards.forEach(vineyard => {
+        newPredictions[vineyard.id] = getHarvestPrediction(vineyard.id);
+      });
+      setPredictions(newPredictions);
+    };
+    
+    loadPredictions();
+  }, [vineyards]);
   
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -741,9 +992,73 @@ export default function DashboardPage() {
                     <ChatPanel />
                 </div>
             </div>
+            
+            {/* Resumen de predicciones */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">°Brix Promedio</CardTitle>
+                  <Grape className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {Object.values(predictions).filter(p => p).length > 0 ? 
+                      (Object.values(predictions).reduce((acc, p) => acc + (p?.brix_next_7d || 0), 0) / 
+                       Object.values(predictions).filter(p => p).length).toFixed(1) : '0'}°
+                  </div>
+                  <p className="text-xs text-muted-foreground">Predicción a 7 días</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Rendimiento Esperado</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {Object.values(predictions).filter(p => p).length > 0 ? 
+                      Math.round(Object.values(predictions).reduce((acc, p) => acc + (p?.yield_final || 0), 0) / 
+                       Object.values(predictions).filter(p => p).length).toLocaleString() : '0'} kg/ha
+                  </div>
+                  <p className="text-xs text-muted-foreground">Promedio estimado</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Listos para Cosecha</CardTitle>
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {Object.values(predictions).filter(p => p && p.harvest_recommendation === 'optimal').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">De {vineyards.length} viñedos</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Alertas Activas</CardTitle>
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {vineyards.filter(v => v.iotData.pests).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Plagas detectadas</p>
+                </CardContent>
+              </Card>
+            </div>
+            
             <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
                 {vineyards.map((vineyard) => (
-                    <VineyardCard key={vineyard.id} vineyard={vineyard} />
+                    <VineyardCard 
+                      key={vineyard.id} 
+                      vineyard={vineyard} 
+                      prediction={predictions[vineyard.id]} 
+                    />
                 ))}
                  <Link href="/vineyards/new">
                     <Card className="flex flex-col items-center justify-center h-full border-2 border-dashed hover:border-primary/80 hover:bg-muted/50 transition-colors duration-300 cursor-pointer">
@@ -766,7 +1081,6 @@ export default function DashboardPage() {
     </div>
   );
 }
-
 
 # === Nombre : layout.tsx
 # === Ruta   : src\app\vineyards\layout.tsx
@@ -874,11 +1188,10 @@ export default function VineyardsLayout({
 # === Ruta   : src\app\vineyards\page.tsx
 # ==============================================
 
-
 "use client";
 
 import Link from "next/link"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Eye, TrendingUp } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -897,11 +1210,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { getVineyards } from "@/lib/data"
+import { getVineyards, getAllHarvestPredictions } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
 
 export default function VineyardsPage() {
     const vineyards = getVineyards();
+    const predictions = getAllHarvestPredictions();
 
     return (
         <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -923,7 +1237,7 @@ export default function VineyardsPage() {
                         <CardHeader>
                             <CardTitle>Viñedos</CardTitle>
                             <CardDescription>
-                                Gestiona tus viñedos y mira su estado.
+                                Gestiona tus viñedos y mira su estado. Haz clic en "Ver Detalle" para ver las métricas de cada parcela.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -934,25 +1248,72 @@ export default function VineyardsPage() {
                                         <TableHead>Ubicación</TableHead>
                                         <TableHead>Estado</TableHead>
                                         <TableHead>Variedades</TableHead>
-                                        <TableHead className="text-right">Parcelas</TableHead>
+                                        <TableHead>Parcelas</TableHead>
+                                        <TableHead>Predicción °Brix</TableHead>
+                                        <TableHead>Rendimiento</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {vineyards.map((vineyard) => (
-                                        <TableRow key={vineyard.id}>
-                                            <TableCell className="font-medium">{vineyard.name}</TableCell>
-                                            <TableCell>{vineyard.location}</TableCell>
-                                            <TableCell>
-                                                {vineyard.iotData.pests ? (
-                                                     <Badge variant="destructive">Alerta de Plaga</Badge>
-                                                ) : (
-                                                    <Badge variant="secondary">Saludable</Badge>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>{vineyard.grapeVarietals}</TableCell>
-                                            <TableCell className="text-right">{vineyard.totalPlots}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {vineyards.map((vineyard) => {
+                                        const prediction = predictions[vineyard.id];
+                                        // Calcular promedio de parcelas
+                                        const avgBrix = vineyard.plots.reduce((acc, plot) => acc + plot.prediction.brix_next_7d, 0) / vineyard.plots.length;
+                                        const avgYield = vineyard.plots.reduce((acc, plot) => acc + plot.prediction.yield_final, 0) / vineyard.plots.length;
+                                        const readyPlots = vineyard.plots.filter(plot => plot.prediction.harvest_recommendation === 'optimal').length;
+                                        
+                                        return (
+                                            <TableRow key={vineyard.id}>
+                                                <TableCell className="font-medium">
+                                                    <Link href={`/vineyards/${vineyard.id}`} className="hover:text-primary">
+                                                        {vineyard.name}
+                                                    </Link>
+                                                </TableCell>
+                                                <TableCell>{vineyard.location}</TableCell>
+                                                <TableCell>
+                                                    {vineyard.iotData.pests ? (
+                                                         <Badge variant="destructive">Alerta de Plaga</Badge>
+                                                    ) : (
+                                                        <Badge variant="secondary">Saludable</Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{vineyard.grapeVarietals}</TableCell>
+                                                <TableCell>
+                                                    <div className="space-y-1">
+                                                        <div>{vineyard.totalPlots} parcelas</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {readyPlots > 0 && (
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    <TrendingUp className="mr-1 h-3 w-3" />
+                                                                    {readyPlots} listas
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="space-y-1">
+                                                        <div className="font-semibold">{avgBrix.toFixed(1)}°</div>
+                                                        <div className="text-xs text-muted-foreground">Promedio</div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="space-y-1">
+                                                        <div className="font-semibold">{Math.round(avgYield).toLocaleString()}</div>
+                                                        <div className="text-xs text-muted-foreground">kg/ha</div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Link href={`/vineyards/${vineyard.id}`}>
+                                                        <Button variant="ghost" size="sm">
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            Ver Detalle
+                                                        </Button>
+                                                    </Link>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -967,7 +1328,6 @@ export default function VineyardsPage() {
         </div>
     )
 }
-
 
 # === Nombre : page.tsx
 # === Ruta   : src\app\vineyards\new\page.tsx
@@ -1121,6 +1481,394 @@ export default function NewVineyardPage() {
   );
 }
 
+
+# === Nombre : layout.tsx
+# === Ruta   : src\app\vineyards\[id]\layout.tsx
+# ==============================================
+
+export default function VineyardDetailLayout({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) {
+    return (
+      <div className="flex min-h-screen w-full flex-col">
+        {children}
+      </div>
+    );
+  }
+
+# === Nombre : page.tsx
+# === Ruta   : src\app\vineyards\[id]\page.tsx
+# ==============================================
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import {
+  ArrowLeft,
+  MapPin,
+  Calendar,
+  Grape,
+  TrendingUp,
+  AlertTriangle,
+  Eye,
+  Droplets,
+  Thermometer,
+  Leaf,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import type { Vineyard, Plot } from "@/types";
+import { getVineyardById, getPlotsByVineyardId } from "@/lib/data";
+
+const PlotStatusBadge: React.FC<{ recommendation: Plot['prediction']['harvest_recommendation'] }> = ({ recommendation }) => {
+  const variants = {
+    optimal: { variant: "default" as const, text: "Óptima", color: "text-green-600" },
+    harvest_soon: { variant: "secondary" as const, text: "Pronto", color: "text-yellow-600" },
+    wait: { variant: "outline" as const, text: "Esperar", color: "text-blue-600" }
+  };
+  
+  const config = variants[recommendation] || variants.wait;
+  
+  return (
+    <Badge variant={config.variant} className={`${config.color} text-xs`}>
+      {config.text}
+    </Badge>
+  );
+};
+
+const MetricCard: React.FC<{
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  description?: string;
+}> = ({ title, value, icon, description }) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      {icon}
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </CardContent>
+  </Card>
+);
+
+export default function VineyardDetailPage() {
+  const params = useParams();
+  const vineyardId = params?.id as string;
+  const [vineyard, setVineyard] = useState<Vineyard | null>(null);
+  const [plots, setPlots] = useState<Plot[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (vineyardId) {
+      const vineyardData = getVineyardById(vineyardId);
+      const plotsData = getPlotsByVineyardId(vineyardId);
+      
+      setVineyard(vineyardData || null);
+      setPlots(plotsData);
+      setLoading(false);
+    }
+  }, [vineyardId]);
+
+  if (loading) {
+    return <div className="p-8">Cargando...</div>;
+  }
+
+  if (!vineyard) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center">
+        <h1 className="text-2xl font-bold mb-4">Viñedo no encontrado</h1>
+        <Link href="/vineyards">
+          <Button>Volver a Viñedos</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Calcular estadísticas del viñedo
+  const avgBrix = plots.reduce((acc, plot) => acc + plot.prediction.brix_next_7d, 0) / plots.length;
+  const avgYield = plots.reduce((acc, plot) => acc + plot.prediction.yield_final, 0) / plots.length;
+  const avgQuality = plots.reduce((acc, plot) => acc + plot.prediction.quality_score, 0) / plots.length;
+  const readyToHarvest = plots.filter(plot => plot.prediction.harvest_recommendation === 'optimal').length;
+  const totalArea = plots.reduce((acc, plot) => acc + plot.area_ha, 0);
+
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <Link href="/vineyards">
+          <Button variant="outline" size="icon" className="h-7 w-7">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="sr-only">Volver</span>
+          </Button>
+        </Link>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">{vineyard.name}</h1>
+          <Badge variant="outline" className="hidden sm:inline-flex">
+            <MapPin className="mr-1 h-3 w-3" />
+            {vineyard.location}
+          </Badge>
+        </div>
+      </header>
+
+      <main className="flex flex-1 flex-col gap-6 p-4 md:gap-8 md:p-8">
+        {/* Información general del viñedo */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Imagen y datos básicos */}
+          <Card className="md:col-span-1">
+            <CardContent className="p-0">
+              <Image
+                src={vineyard.imageUrl}
+                alt={vineyard.name}
+                width={400}
+                height={300}
+                className="w-full h-48 object-cover rounded-t-lg"
+              />
+              <div className="p-6">
+                <h2 className="font-bold text-xl mb-2">{vineyard.name}</h2>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    <span>{vineyard.location}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Grape className="h-4 w-4" />
+                    <span>{vineyard.grapeVarietals}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    <span>{vineyard.totalPlots} parcelas • {totalArea.toFixed(1)} ha</span>
+                  </div>
+                </div>
+                {vineyard.iotData.pests && (
+                  <Badge variant="destructive" className="mt-4">
+                    <AlertTriangle className="mr-1 h-3 w-3" />
+                    Alerta de Plagas
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Métricas resumen */}
+          <div className="md:col-span-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard
+              title="°Brix Promedio"
+              value={`${avgBrix.toFixed(1)}°`}
+              icon={<Grape className="h-4 w-4 text-muted-foreground" />}
+              description="Predicción a 7 días"
+            />
+            <MetricCard
+              title="Rendimiento"
+              value={`${Math.round(avgYield).toLocaleString()}`}
+              icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
+              description="kg/ha promedio"
+            />
+            <MetricCard
+              title="Calidad"
+              value={`${Math.round(avgQuality)}/100`}
+              icon={<Leaf className="h-4 w-4 text-muted-foreground" />}
+              description="Score de calidad"
+            />
+            <MetricCard
+              title="Listas"
+              value={`${readyToHarvest}/${plots.length}`}
+              icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+              description="Parcelas para cosecha"
+            />
+          </div>
+        </div>
+
+        {/* Tabla de parcelas */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Detalle por Parcelas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">#</TableHead>
+                    <TableHead>Área</TableHead>
+                    <TableHead>Suelo</TableHead>
+                    <TableHead>Edad</TableHead>
+                    <TableHead>°Brix</TableHead>
+                    <TableHead>Rendimiento</TableHead>
+                    <TableHead>Calidad</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Cosecha</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {plots.map((plot) => (
+                    <TableRow key={plot.id}>
+                      <TableCell className="font-medium">
+                        {plot.plotNumber}
+                      </TableCell>
+                      <TableCell>
+                        {plot.area_ha.toFixed(1)} ha
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="text-sm">{plot.soilType}</div>
+                          <div className="text-xs text-muted-foreground">
+                            pH: {plot.iotData.soil_ph.toFixed(1)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="text-sm">{plot.vineAge} años</div>
+                          <div className="text-xs text-muted-foreground">
+                            {plot.exposure}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">
+                            {plot.prediction.brix_next_7d}°
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {(plot.prediction.confidence_brix * 100).toFixed(0)}% confianza
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">
+                            {plot.prediction.yield_final.toLocaleString()}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            kg/ha
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">
+                            {plot.prediction.quality_score}/100
+                          </div>
+                          <Progress 
+                            value={plot.prediction.quality_score} 
+                            className="h-1 w-12"
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <PlotStatusBadge recommendation={plot.prediction.harvest_recommendation} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {new Date(plot.prediction.expected_harvest_date).toLocaleDateString('es-ES', {
+                            day: '2-digit',
+                            month: 'short'
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm">
+                          Ver Detalles
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Resumen de condiciones ambientales */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Thermometer className="h-5 w-5" />
+              Condiciones Ambientales Promedio
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Thermometer className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm font-medium">Temperatura</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {vineyard.iotData.temp_mean_7d.toFixed(1)}°C
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Media 7 días
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Droplets className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm font-medium">Humedad Rel.</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {vineyard.iotData.hr_max_3d.toFixed(0)}%
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Máxima 3 días
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Droplets className="h-4 w-4 text-green-500" />
+                  <span className="text-sm font-medium">Humedad Suelo</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {vineyard.iotData.soil_moist_mean_24h.toFixed(0)}%
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Media 24h
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Leaf className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium">NDVI</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {vineyard.iotData.ndvi_anom.toFixed(3)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Anomalía NDVI
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+}
 
 # === Nombre : accordion.tsx
 # === Ruta   : src\components\ui\accordion.tsx
@@ -4517,98 +5265,461 @@ export { useToast, toast }
 # === Ruta   : src\lib\data.ts
 # ==============================================
 
-import type { Vineyard } from "@/types";
+import type { Vineyard, HarvestPrediction, Plot } from "@/types";
+
+// Función para generar datos de una parcela individual
+function generatePlotData(
+  plotNumber: number, 
+  vineyardVarietals: string, 
+  vineyardLocation: string,
+  totalPlots: number,
+  baseIoTData: any
+): Plot {
+  // Calcular día del año
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now.getTime() - start.getTime();
+  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+  
+  // Componentes estacionales
+  const sin_day = Math.sin(2 * Math.PI * dayOfYear / 365);
+  const cos_day = Math.cos(2 * Math.PI * dayOfYear / 365);
+  
+  // Generar variación por parcela (cada parcela es ligeramente diferente)
+  const variation = () => 0.8 + Math.random() * 0.4; // 0.8 a 1.2
+  const smallVariation = () => 0.95 + Math.random() * 0.1; // 0.95 a 1.05
+  
+  // Tipos de suelo variados
+  const soilTypes = ['Franco', 'Arcilloso', 'Arenoso', 'Franco-arenoso', 'Franco-arcilloso'];
+  const exposures = ['Norte', 'Sur', 'Este', 'Oeste', 'Noreste', 'Noroeste', 'Sureste', 'Suroeste'];
+  
+  // Año de plantación variado (últimos 5-25 años)
+  const plantingYear = 2024 - (5 + Math.floor(Math.random() * 20));
+  const vineAge = 2024 - plantingYear;
+  
+  // IoT data con variaciones por parcela
+  const plotIoTData = {
+    temp_mean_7d: baseIoTData.temp_mean_7d * variation(),
+    hr_max_3d: baseIoTData.hr_max_3d * smallVariation(),
+    soil_moist_mean_24h: baseIoTData.soil_moist_mean_24h * variation(),
+    ndvi_anom: baseIoTData.ndvi_anom + (Math.random() - 0.5) * 0.1,
+    evi_anom: baseIoTData.evi_anom + (Math.random() - 0.5) * 0.08,
+    sin_day,
+    cos_day,
+    variedad_onehot: baseIoTData.variedad_onehot,
+    // Datos específicos de parcela
+    soil_ph: 6.0 + Math.random() * 2.0, // pH 6.0 - 8.0
+    organic_matter: 1.5 + Math.random() * 3.5, // 1.5% - 5.0%
+    water_stress_index: Math.random() * 0.7, // 0 - 0.7
+  };
+  
+  // Generar predicciones para esta parcela específica
+  const brix_next_7d = brixRandomForest(plotIoTData);
+  const yield_final = yieldXGBoost({
+    ...plotIoTData,
+    surface_ha: baseIoTData.surface_ha / totalPlots // Área promedio por parcela
+  });
+  
+  // Fecha estimada de cosecha basada en °Brix
+  const daysToHarvest = Math.max(7, Math.round((24 - brix_next_7d) * 3));
+  const harvestDate = new Date();
+  harvestDate.setDate(harvestDate.getDate() + daysToHarvest);
+  
+  // Score de calidad basado en múltiples factores
+  const qualityScore = Math.min(100, Math.max(60, 
+    (brix_next_7d * 3) + 
+    (yield_final / 100) + 
+    ((8 - Math.abs(plotIoTData.soil_ph - 7)) * 5) +
+    ((5 - plotIoTData.organic_matter) * 3) +
+    ((1 - plotIoTData.water_stress_index) * 10)
+  ));
+
+  return {
+    id: `plot-${plotNumber}`,
+    plotNumber,
+    area_ha: parseFloat(((baseIoTData.surface_ha / totalPlots) * (0.8 + Math.random() * 0.4)).toFixed(2)),
+    soilType: soilTypes[Math.floor(Math.random() * soilTypes.length)],
+    slope: Math.round(Math.random() * 25), // 0-25 grados
+    exposure: exposures[Math.floor(Math.random() * exposures.length)],
+    plantingYear,
+    vineAge,
+    iotData: plotIoTData,
+    prediction: {
+      brix_next_7d,
+      yield_final,
+      confidence_brix: 0.75 + Math.random() * 0.2,
+      confidence_yield: 0.70 + Math.random() * 0.25,
+      harvest_recommendation: brix_next_7d >= 24 ? 'optimal' : brix_next_7d >= 22 ? 'harvest_soon' : 'wait',
+      expected_harvest_date: harvestDate.toISOString().split('T')[0],
+      quality_score: Math.round(qualityScore)
+    }
+  };
+}
+
+// Función para generar datos simulados realistas del viñedo
+function generateIoTData(varietals: string, location: string) {
+  // Calcular día del año
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now.getTime() - start.getTime();
+  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+  
+  // Componentes estacionales
+  const sin_day = Math.sin(2 * Math.PI * dayOfYear / 365);
+  const cos_day = Math.cos(2 * Math.PI * dayOfYear / 365);
+  
+  // Simulación de one-hot encoding para variedades principales
+  const varietyMap: { [key: string]: number[] } = {
+    'Cabernet Sauvignon': [1, 0, 0, 0, 0],
+    'Merlot': [0, 1, 0, 0, 0],
+    'Chardonnay': [0, 0, 1, 0, 0],
+    'Pinot Noir': [0, 0, 0, 1, 0],
+    'Sauvignon Blanc': [0, 0, 0, 0, 1]
+  };
+  
+  // Determinar variedad principal
+  const mainVariety = Object.keys(varietyMap).find(v => varietals.includes(v)) || 'Cabernet Sauvignon';
+  
+  return {
+    pests: Math.random() < 0.2,
+    temp_mean_7d: 18 + Math.random() * 12, // 18-30°C
+    hr_max_3d: 60 + Math.random() * 35, // 60-95%
+    soil_moist_mean_24h: 25 + Math.random() * 50, // 25-75%
+    ndvi_anom: -0.2 + Math.random() * 0.4, // -0.2 a 0.2
+    evi_anom: -0.15 + Math.random() * 0.3, // -0.15 a 0.15
+    sin_day,
+    cos_day,
+    variedad_onehot: varietyMap[mainVariety],
+    surface_ha: 5 + Math.random() * 20 // 5-25 hectáreas
+  };
+}
+
+// Función para generar viñedo completo con parcelas
+function generateVineyardWithPlots(
+  id: string,
+  name: string, 
+  location: string, 
+  grapeVarietals: string, 
+  totalPlots: number,
+  imageUrl: string,
+  imageHint: string
+): Vineyard {
+  const baseIoTData = generateIoTData(grapeVarietals, location);
+  
+  // Generar todas las parcelas
+  const plots: Plot[] = [];
+  for (let i = 1; i <= totalPlots; i++) {
+    plots.push(generatePlotData(i, grapeVarietals, location, totalPlots, baseIoTData));
+  }
+  
+  return {
+    id,
+    name,
+    location,
+    grapeVarietals,
+    totalPlots,
+    plots,
+    iotData: baseIoTData,
+    imageUrl,
+    imageHint
+  };
+}
 
 export const initialVineyards: Vineyard[] = [
-  {
-    id: "1",
-    name: "Finca Roble Alto",
-    location: "Valle de Napa, California",
-    grapeVarietals: "Cabernet Sauvignon, Merlot",
-    totalPlots: 12,
-    iotData: {
-      pests: false,
-    },
-    imageUrl: "/imgs/1.jpg",
-    imageHint: "vineyard aerial"
-  },
-  {
-    id: "2",
-    name: "Viñedos Arroyo Sauce",
-    location: "Borgoña, Francia",
-    grapeVarietals: "Chardonnay, Pinot Noir",
-    totalPlots: 8,
-     iotData: {
-      pests: true,
-    },
-    imageUrl: "/imgs/2.png",
-    imageHint: "grapes vine"
-  },
-  {
-    id: "3",
-    name: "Hacienda del Valle del Sol",
-    location: "Toscana, Italia",
-    grapeVarietals: "Zinfandel, Syrah",
-    totalPlots: 15,
-     iotData: {
-      pests: false,
-    },
-    imageUrl: "/imgs/3.jpeg",
-    imageHint: "vineyard sunset"
-  },
-   {
-    id: "4",
-    name: "Vides de la Montaña Nublada",
-    location: "Sonoma, California",
-    grapeVarietals: "Sauvignon Blanc",
-    totalPlots: 10,
-     iotData: {
-      pests: false,
-    },
-    imageUrl: "/imgs/4.png",
-    imageHint: "vineyard mountain"
-  },
+  generateVineyardWithPlots(
+    "1", 
+    "Finca Roble Alto", 
+    "Valle de Napa, California", 
+    "Cabernet Sauvignon, Merlot", 
+    12, 
+    "/imgs/1.jpg", 
+    "vineyard aerial"
+  ),
+  generateVineyardWithPlots(
+    "2", 
+    "Viñedos Arroyo Sauce", 
+    "Borgoña, Francia", 
+    "Chardonnay, Pinot Noir", 
+    8, 
+    "/imgs/2.png", 
+    "grapes vine"
+  ),
+  generateVineyardWithPlots(
+    "3", 
+    "Hacienda del Valle del Sol", 
+    "Toscana, Italia", 
+    "Zinfandel, Syrah", 
+    15, 
+    "/imgs/3.jpeg", 
+    "vineyard sunset"
+  ),
+  generateVineyardWithPlots(
+    "4", 
+    "Vides de la Montaña Nublada", 
+    "Sonoma, California", 
+    "Sauvignon Blanc", 
+    10, 
+    "/imgs/4.png", 
+    "vineyard mountain"
+  ),
 ];
 
-// Mantenemos un estado en memoria para simular una base de datos.
+// Estado en memoria
 let vineyardsDB = [...initialVineyards];
 
+// Funciones existentes
 export function getVineyards() {
-  // En una aplicación real, esto consultaría una base de datos.
   return vineyardsDB;
 }
 
 export function getVineyardById(id: string) {
-    return vineyardsDB.find(v => v.id === id);
+  return vineyardsDB.find(v => v.id === id);
 }
 
-export function addVineyard(vineyardData: Omit<Vineyard, 'id' | 'iotData'>) {
-    const newVineyard: Vineyard = {
-        ...vineyardData,
-        id: (vineyardsDB.length + 1).toString(), // ID simple para el ejemplo
-        iotData: {
-            pests: Math.random() < 0.2, // 20% de probabilidad de tener plagas
-        },
-    };
-    vineyardsDB.push(newVineyard);
-    return newVineyard;
+export function addVineyard(vineyardData: Omit<Vineyard, 'id' | 'iotData' | 'plots'>) {
+  const newVineyard = generateVineyardWithPlots(
+    (vineyardsDB.length + 1).toString(),
+    vineyardData.name,
+    vineyardData.location,
+    vineyardData.grapeVarietals,
+    vineyardData.totalPlots,
+    vineyardData.imageUrl,
+    vineyardData.imageHint
+  );
+  vineyardsDB.push(newVineyard);
+  return newVineyard;
 }
 
+/**
+ * Obtener datos específicos de una parcela
+ */
+export function getPlotById(vineyardId: string, plotNumber: number): Plot | null {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return null;
+  
+  return vineyard.plots.find(plot => plot.plotNumber === plotNumber) || null;
+}
 
-// Función para la IA
-export function getVineyardData(vineyardName?: string) {
-    if (vineyardName) {
-        const vineyard = vineyardsDB.find(v => v.name.toLowerCase().includes(vineyardName.toLowerCase()));
-        return vineyard || { error: "Viñedo no encontrado" };
+/**
+ * Obtener todas las parcelas de un viñedo
+ */
+export function getPlotsByVineyardId(vineyardId: string): Plot[] {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return [];
+  
+  return vineyard.plots;
+}
+
+// ============ ALGORITMOS DE PREDICCIÓN DE COSECHA ============
+
+/**
+ * Simulación del modelo Random Forest para predicción de °Brix
+ * Input: datos IoT del viñedo o parcela
+ * Output: °Brix previsto a 7 días
+ */
+function brixRandomForest(iotData: any): number {
+  const {
+    temp_mean_7d,
+    hr_max_3d,
+    soil_moist_mean_24h,
+    ndvi_anom,
+    evi_anom,
+    sin_day,
+    cos_day,
+    variedad_onehot,
+    soil_ph,
+    organic_matter,
+    water_stress_index
+  } = iotData;
+
+  // Simulación de Random Forest (pesos basados en importancia real de features)
+  let brixPrediction = 18; // Base °Brix
+  
+  // Contribución de temperatura (feature más importante)
+  brixPrediction += (temp_mean_7d - 20) * 0.4;
+  
+  // Contribución de humedad relativa
+  brixPrediction -= (hr_max_3d - 75) * 0.02;
+  
+  // Contribución de humedad del suelo
+  brixPrediction += (50 - soil_moist_mean_24h) * 0.05;
+  
+  // Contribución de índices de vegetación
+  brixPrediction += ndvi_anom * 8 + evi_anom * 6;
+  
+  // Contribución estacional
+  brixPrediction += sin_day * 2 + cos_day * 1.5;
+  
+  // Contribución de variedad (algunas variedades acumulan más azúcar)
+  const varietyContrib = variedad_onehot[0] * 1.2 + // Cabernet Sauvignon
+                        variedad_onehot[1] * 0.8 +  // Merlot
+                        variedad_onehot[2] * 0.5 +  // Chardonnay
+                        variedad_onehot[3] * 0.7 +  // Pinot Noir
+                        variedad_onehot[4] * 0.9;   // Sauvignon Blanc
+  
+  brixPrediction += varietyContrib;
+  
+  // Contribuciones específicas de parcela (si están disponibles)
+  if (soil_ph) {
+    brixPrediction += (soil_ph - 6.5) * 0.5; // pH óptimo alrededor de 6.5
+  }
+  if (organic_matter) {
+    brixPrediction += organic_matter * 0.3; // Más materia orgánica = mejor nutrición
+  }
+  if (water_stress_index !== undefined) {
+    brixPrediction += water_stress_index * 2; // Estrés hídrico moderado mejora °Brix
+  }
+  
+  // Agregar algo de ruido para simular incertidumbre
+  brixPrediction += (Math.random() - 0.5) * 2;
+  
+  // Mantener en rango realista (15-28 °Brix)
+  return Math.max(15, Math.min(28, parseFloat(brixPrediction.toFixed(1))));
+}
+
+/**
+ * Simulación del modelo XGBoost para predicción de rendimiento
+ * Input: datos IoT del viñedo o parcela + superficie
+ * Output: rendimiento final kg/ha
+ */
+function yieldXGBoost(iotData: any): number {
+  const {
+    temp_mean_7d,
+    hr_max_3d,
+    soil_moist_mean_24h,
+    ndvi_anom,
+    evi_anom,
+    sin_day,
+    cos_day,
+    variedad_onehot,
+    surface_ha,
+    soil_ph,
+    organic_matter,
+    water_stress_index
+  } = iotData;
+
+  // Simulación de XGBoost (gradient boosting)
+  let yieldPrediction = 8000; // Base yield kg/ha
+  
+  // Contribución de temperatura (óptimo alrededor de 22-25°C)
+  const tempOptimal = 23.5;
+  yieldPrediction -= Math.abs(temp_mean_7d - tempOptimal) * 150;
+  
+  // Contribución de humedad relativa (muy importante para rendimiento)
+  yieldPrediction += (hr_max_3d - 70) * 25;
+  
+  // Contribución de humedad del suelo (crítico)
+  yieldPrediction += (soil_moist_mean_24h - 40) * 60;
+  
+  // Contribución de índices de vegetación (muy correlacionados con yield)
+  yieldPrediction += ndvi_anom * 3000 + evi_anom * 2500;
+  
+  // Contribución estacional
+  yieldPrediction += sin_day * 500 + cos_day * 300;
+  
+  // Contribución de variedad (diferentes potenciales de rendimiento)
+  const varietyYield = variedad_onehot[0] * 1000 + // Cabernet Sauvignon
+                      variedad_onehot[1] * 1200 +  // Merlot (más productivo)
+                      variedad_onehot[2] * 1100 +  // Chardonnay
+                      variedad_onehot[3] * 900 +   // Pinot Noir (menos productivo)
+                      variedad_onehot[4] * 1050;   // Sauvignon Blanc
+  
+  yieldPrediction += varietyYield;
+  
+  // Efecto de escala (parcelas más grandes pueden tener ligeras eficiencias)
+  if (surface_ha) {
+    yieldPrediction += Math.log(Math.max(0.1, surface_ha)) * 100;
+  }
+  
+  // Contribuciones específicas de parcela
+  if (soil_ph) {
+    yieldPrediction -= Math.abs(soil_ph - 6.8) * 200; // pH óptimo para rendimiento
+  }
+  if (organic_matter) {
+    yieldPrediction += organic_matter * 400; // Materia orgánica mejora rendimiento
+  }
+  if (water_stress_index !== undefined) {
+    yieldPrediction -= water_stress_index * 2000; // Estrés hídrico reduce rendimiento
+  }
+  
+  // Agregar ruido para simular incertidumbre
+  yieldPrediction += (Math.random() - 0.5) * 1000;
+  
+  // Mantener en rango realista (4000-15000 kg/ha)
+  return Math.max(4000, Math.min(15000, Math.round(yieldPrediction)));
+}
+
+/**
+ * Función principal para obtener predicciones de cosecha
+ */
+export function getHarvestPrediction(vineyardId: string): HarvestPrediction | null {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return null;
+
+  const brix_next_7d = brixRandomForest(vineyard.iotData);
+  const yield_final = yieldXGBoost(vineyard.iotData);
+  
+  // Calcular confianza basada en calidad de datos simulada
+  const confidence_brix = 0.75 + Math.random() * 0.2; // 75-95%
+  const confidence_yield = 0.70 + Math.random() * 0.25; // 70-95%
+  
+  // Determinar recomendación de cosecha
+  let harvest_recommendation: 'optimal' | 'wait' | 'harvest_soon' = 'wait';
+  if (brix_next_7d >= 24) {
+    harvest_recommendation = 'optimal';
+  } else if (brix_next_7d >= 22) {
+    harvest_recommendation = 'harvest_soon';
+  }
+  
+  return {
+    brix_next_7d,
+    yield_final,
+    confidence_brix: parseFloat(confidence_brix.toFixed(2)),
+    confidence_yield: parseFloat(confidence_yield.toFixed(2)),
+    harvest_recommendation
+  };
+}
+
+/**
+ * Obtener predicciones para todos los viñedos
+ */
+export function getAllHarvestPredictions(): { [key: string]: HarvestPrediction } {
+  const predictions: { [key: string]: HarvestPrediction } = {};
+  
+  vineyardsDB.forEach(vineyard => {
+    const prediction = getHarvestPrediction(vineyard.id);
+    if (prediction) {
+      predictions[vineyard.id] = prediction;
     }
-    // Devuelve un resumen de todos los viñedos si no se especifica uno
-    return vineyardsDB.map(v => ({
-        nombre: v.name,
-        ubicacion: v.location,
-        alerta_plagas: v.iotData.pests,
-    }));
+  });
+  
+  return predictions;
 }
 
+// Función para la IA (actualizada)
+export function getVineyardData(vineyardName?: string) {
+  if (vineyardName) {
+    const vineyard = vineyardsDB.find(v => v.name.toLowerCase().includes(vineyardName.toLowerCase()));
+    if (!vineyard) return { error: "Viñedo no encontrado" };
+    
+    const prediction = getHarvestPrediction(vineyard.id);
+    return {
+      ...vineyard,
+      prediccion_cosecha: prediction
+    };
+  }
+  
+  // Resumen con predicciones
+  const allPredictions = getAllHarvestPredictions();
+  return vineyardsDB.map(v => ({
+    nombre: v.name,
+    ubicacion: v.location,
+    alerta_plagas: v.iotData.pests,
+    prediccion_brix: allPredictions[v.id]?.brix_next_7d,
+    prediccion_rendimiento: allPredictions[v.id]?.yield_final,
+    recomendacion: allPredictions[v.id]?.harvest_recommendation
+  }));
+}
 
 # === Nombre : utils.ts
 # === Ruta   : src\lib\utils.ts
@@ -4626,14 +5737,27 @@ export function cn(...inputs: ClassValue[]) {
 # === Ruta   : src\types\index.ts
 # ==============================================
 
+// src/types/index.ts
+
 export type Vineyard = {
   id: string;
   name: string;
   location: string;
   grapeVarietals: string;
   totalPlots: number;
+  plots: Plot[]; // Array de parcelas individuales
   iotData: {
     pests: boolean;
+    // Datos agregados del viñedo (promedio de todas las parcelas)
+    temp_mean_7d: number; // Temperatura media últimos 7 días (°C)
+    hr_max_3d: number; // Humedad relativa máxima últimos 3 días (%)
+    soil_moist_mean_24h: number; // Humedad del suelo media últimas 24h (%)
+    ndvi_anom: number; // Anomalía NDVI
+    evi_anom: number; // Anomalía EVI
+    sin_day: number; // Componente sinusoidal del día del año
+    cos_day: number; // Componente cosinusoidal del día del año
+    variedad_onehot: number[]; // One-hot encoding de variedades
+    surface_ha: number; // Superficie total en hectáreas
   };
   imageUrl: string;
   imageHint: string;
@@ -4643,4 +5767,47 @@ export type Message = {
   id: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
+};
+
+export type Plot = {
+  id: string;
+  plotNumber: number;
+  area_ha: number; // Área de la parcela en hectáreas
+  soilType: string; // Tipo de suelo
+  slope: number; // Pendiente en grados
+  exposure: string; // Exposición al sol (Norte, Sur, etc.)
+  plantingYear: number; // Año de plantación
+  vineAge: number; // Edad de las vides en años
+  // Métricas específicas de la parcela
+  iotData: {
+    temp_mean_7d: number;
+    hr_max_3d: number;
+    soil_moist_mean_24h: number;
+    ndvi_anom: number;
+    evi_anom: number;
+    sin_day: number;
+    cos_day: number;
+    variedad_onehot: number[];
+    // Métricas adicionales específicas de parcela
+    soil_ph: number;
+    organic_matter: number; // % materia orgánica
+    water_stress_index: number; // Índice de estrés hídrico
+  };
+  prediction: {
+    brix_next_7d: number;
+    yield_final: number;
+    confidence_brix: number;
+    confidence_yield: number;
+    harvest_recommendation: 'optimal' | 'wait' | 'harvest_soon';
+    expected_harvest_date: string; // Fecha estimada de cosecha
+    quality_score: number; // Score de calidad esperada (1-100)
+  };
+};
+
+export type HarvestPrediction = {
+  brix_next_7d: number; // °Brix previsto a 7 días
+  yield_final: number; // Rendimiento final kg/ha
+  confidence_brix: number; // Confianza del modelo (0-1)
+  confidence_yield: number; // Confianza del modelo (0-1)
+  harvest_recommendation: 'optimal' | 'wait' | 'harvest_soon';
 };

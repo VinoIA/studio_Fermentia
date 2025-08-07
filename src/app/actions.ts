@@ -49,7 +49,6 @@ export async function chatWithFermentia(history: Message[], message: string) {
   }
 }
 
-
 const vineyardSchema = z.object({
     name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
     location: z.string().min(3, "La ubicación debe tener al menos 3 caracteres."),
