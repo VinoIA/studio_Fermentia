@@ -1,0 +1,537 @@
+¡Excelente! He reestructurado completamente tu proyecto para alinearlo con el nuevo objetivo de crear un panel de monitoreo predictivo. He modificado la estructura de datos, actualizado la interfaz principal y ajustado los estilos para que coincidan con tus requisitos.
+A continuación, te presento un resumen de los cambios y el código completo y corregido.
+Resumen de los Cambios Clave:
+Estructura de Datos (/types y /lib/data):
+He enriquecido el tipo Plot para incluir todos los nuevos sensores de IoT (temperatura, pH, conductividad, luz, humedad del aire) y un campo para tendencias semanales.
+He actualizado el objeto prediction para incluir la humedad estimada y un estado de cosecha más descriptivo (Pronto, Esperar, Muy temprano).
+He modificado data.ts para generar datos simulados mucho más realistas que ahora incluyen todos estos nuevos campos, haciendo que el panel se sienta vivo y dinámico.
+Interfaz Principal (/app/page.tsx):
+La página de inicio ha sido completamente transformada en el Panel de Monitoreo Predictivo.
+Se ha eliminado la vista de tarjetas anterior y el chat para dar paso a un diseño enfocado y profesional.
+Se ha implementado la vista de resumen de la finca en la parte superior, mostrando los KPIs principales y la información general, tal como lo solicitaste.
+La sección principal ahora es la tabla detallada por parcelas, que separa claramente los "Datos Actuales de Sensores" de la "Predicción a 7 Días".
+Estilo y Componentes:
+Se utiliza un modo oscuro consistente y una tipografía profesional.
+He creado un nuevo componente StatusBadge para mostrar el estado de la cosecha con los colores que especificaste (dorado, azul, gris), mejorando la legibilidad de la tabla.
+La tabla ahora incluye las tendencias semanales con iconos y colores para indicar si los valores suben o bajan.
+Navegación y Layouts:
+He actualizado la navegación principal. El enlace "Resumen" ahora se llama "Monitoreo Predictivo" y es la vista principal de la aplicación.
+El título de la página y metadatos se han actualizado para reflejar el nuevo propósito del panel.
+A continuación, tienes el código modificado para cada archivo relevante.
+Código Corregido y Reestructurado
+1. Tipos de Datos Actualizados
+He expandido los tipos para incluir todos los nuevos campos de sensores y predicciones.
+src/types/index.ts
+code
+TypeScript
+// src/types/index.ts
+
+export type Vineyard = {
+  id: string;
+  name: string;
+  location: string;
+  grapeVarietals: string;
+  totalPlots: number;
+  totalArea_ha: number; // Área total calculada
+  plots: Plot[]; // Array de parcelas individuales
+  iotData: {
+    pests: boolean;
+    temp_mean_7d: number;
+    hr_max_3d: number;
+    soil_moist_mean_24h: number;
+  };
+  imageUrl: string;
+  imageHint: string;
+};
+
+export type Message = {
+  id: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+};
+
+export type Plot = {
+  id: string;
+  plotNumber: number;
+  area_ha: number;
+  
+  // Datos actuales de sensores
+  iotData: {
+    soil_moisture: number; // Humedad del suelo actual (%)
+    temperature: number;   // Temperatura actual (°C)
+    ph: number;            // pH del suelo
+    ec: number;            // Conductividad eléctrica (mS/cm)
+    light: number;         // Intensidad de luz (lux)
+    air_humidity: number;  // Humedad relativa del aire (%)
+    weekly_trends: {       // Tendencias de la última semana
+      soil_moisture: number;
+      temperature: number;
+      light: number;
+    };
+  };
+
+  // Predicciones
+  prediction: {
+    brix_next_7d: number;
+    estimated_soil_moisture_7d: number;
+    confidence: number;
+    harvest_status: 'Pronto' | 'Esperar' | 'Muy temprano';
+  };
+};
+
+// Este tipo ya no es necesario, la información está en Plot.prediction
+// export type HarvestPrediction = { ... };
+2. Generación de Datos Simulados Mejorada
+El motor de datos ahora genera valores para todos los sensores y calcula las tendencias y estados de cosecha.
+src/lib/data.ts
+code
+TypeScript
+import type { Vineyard, Plot } from "@/types";
+
+// Simulación de un modelo predictivo simple para la humedad del suelo
+function predictSoilMoisture(currentMoisture: number, tempTrend: number): number {
+  // A mayor temperatura, más evaporación, menor humedad futura
+  const predictedMoisture = currentMoisture - (tempTrend * 1.5) + (Math.random() - 0.5);
+  return parseFloat(Math.max(10, Math.min(50, predictedMoisture)).toFixed(1));
+}
+
+// Simulación de un modelo predictivo simple para el Brix
+function predictBrix(currentTemp: number, currentLight: number): number {
+    const brix = 18 + ((currentTemp - 20) * 0.3) + ((currentLight - 4500) / 1000) + Math.random();
+    return parseFloat(brix.toFixed(1));
+}
+
+// Función para generar datos de una parcela individual
+function generatePlotData(plotNumber: number): Plot {
+  const soil_moisture = 15 + Math.random() * 15; // 15-30%
+  const temperature = 18 + Math.random() * 8; // 18-26°C
+  const light = 4000 + Math.random() * 2000; // 4000-6000 lux
+  
+  const tempTrend = -1 + Math.random() * 3; // -1°C a +2°C
+
+  const brix_next_7d = predictBrix(temperature, light);
+
+  let harvest_status: 'Pronto' | 'Esperar' | 'Muy temprano';
+  if (brix_next_7d > 23) {
+    harvest_status = 'Pronto';
+  } else if (brix_next_7d >= 21) {
+    harvest_status = 'Esperar';
+  } else {
+    harvest_status = 'Muy temprano';
+  }
+
+  return {
+    id: `plot-${plotNumber}`,
+    plotNumber,
+    area_ha: parseFloat((1.5 + Math.random() * 1).toFixed(1)), // 1.5 a 2.5 ha
+    
+    iotData: {
+      soil_moisture: parseFloat(soil_moisture.toFixed(1)),
+      temperature: parseFloat(temperature.toFixed(1)),
+      ph: parseFloat((6.0 + Math.random() * 1.5).toFixed(1)), // 6.0 - 7.5
+      ec: parseFloat((1.0 + Math.random() * 0.8).toFixed(2)), // 1.0 - 1.8 mS/cm
+      light: Math.round(light),
+      air_humidity: parseFloat((55 + Math.random() * 15).toFixed(1)), // 55-70%
+      weekly_trends: {
+        soil_moisture: parseFloat((-2 + Math.random() * 3).toFixed(1)), // -2% a +1%
+        temperature: parseFloat(tempTrend.toFixed(1)),
+        light: Math.round(-800 + Math.random() * 1600), // -800 a +800 lux
+      },
+    },
+    prediction: {
+      brix_next_7d,
+      estimated_soil_moisture_7d: predictSoilMoisture(soil_moisture, tempTrend),
+      confidence: parseFloat((0.85 + Math.random() * 0.12).toFixed(2)), // 85-97%
+      harvest_status,
+    }
+  };
+}
+
+// Función para generar viñedo completo con parcelas
+function generateVineyard(
+  id: string,
+  name: string, 
+  location: string, 
+  grapeVarietals: string, 
+  totalPlots: number,
+  imageUrl: string,
+  imageHint: string
+): Vineyard {
+  
+  const plots: Plot[] = [];
+  for (let i = 1; i <= totalPlots; i++) {
+    plots.push(generatePlotData(i));
+  }
+
+  const totalArea_ha = plots.reduce((sum, plot) => sum + plot.area_ha, 0);
+  
+  return {
+    id,
+    name,
+    location,
+    grapeVarietals,
+    totalPlots,
+    totalArea_ha: parseFloat(totalArea_ha.toFixed(1)),
+    plots,
+    iotData: {
+        pests: Math.random() < 0.1, // 10% chance of pests
+        temp_mean_7d: 22.5,
+        hr_max_3d: 65,
+        soil_moist_mean_24h: 24,
+    },
+    imageUrl,
+    imageHint
+  };
+}
+
+const initialVineyards: Vineyard[] = [
+  generateVineyard(
+    "1", 
+    "Finca Roble Alto", 
+    "Valle de Napa, California", 
+    "Cabernet Sauvignon, Merlot", 
+    12, 
+    "https://placehold.co/1200x400/1a1a2e/f0f0f0.png?text=Finca+Roble+Alto", 
+    "vineyard aerial view"
+  ),
+];
+
+let vineyardsDB = [...initialVineyards];
+
+// Funciones para acceder a los datos
+export function getVineyards(): Vineyard[] {
+  return vineyardsDB;
+}
+
+export function getVineyardById(id: string): Vineyard | undefined {
+  return vineyardsDB.find(v => v.id === id);
+}
+
+export function getPlotsByVineyardId(vineyardId: string): Plot[] {
+  const vineyard = getVineyardById(vineyardId);
+  return vineyard ? vineyard.plots : [];
+}
+
+// ... (las demás funciones como addVineyard, etc. pueden permanecer si las necesitas en otras partes)
+3. Nuevo Panel de Monitoreo Predictivo
+Esta es la nueva cara de tu aplicación, un panel de control denso en información y enfocado en la predicción.
+src/app/page.tsx
+code
+TypeScript
+import Image from "next/image";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { getVineyardById } from "@/lib/data";
+import type { Plot } from "@/types";
+import {
+  Thermometer,
+  Droplets,
+  Zap,
+  Sun,
+  Wind,
+  Atom,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Grape,
+  CalendarCheck,
+  MapPin,
+  Sprout
+} from "lucide-react";
+
+// Componente para el estado de cosecha con colores
+const StatusBadge: React.FC<{ status: Plot['prediction']['harvest_status'] }> = ({ status }) => {
+  const variants = {
+    Pronto: "bg-yellow-500/80 border-yellow-400 text-white hover:bg-yellow-500/90",
+    Esperar: "bg-blue-500/80 border-blue-400 text-white hover:bg-blue-500/90",
+    "Muy temprano": "bg-gray-500/80 border-gray-400 text-white hover:bg-gray-500/90",
+  };
+  return <Badge className={variants[status]}>{status}</Badge>;
+};
+
+// Componente para mostrar tendencias
+const Trend: React.FC<{ value: number; unit: string }> = ({ value, unit }) => {
+  const isUp = value > 0;
+  const isDown = value < 0;
+  const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus;
+  const color = isUp ? "text-green-400" : isDown ? "text-red-400" : "text-gray-400";
+  const sign = isUp ? "+" : "";
+
+  return (
+    <div className={`flex items-center gap-1 text-xs ${color}`}>
+      <Icon className="h-3 w-3" />
+      <span>{`${sign}${value}${unit}`}</span>
+    </div>
+  );
+};
+
+
+const MetricCard: React.FC<{ title: string; value: string; icon: React.ReactNode }> = ({ title, value, icon }) => (
+  <Card className="bg-card/50 border-border/50">
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+      {icon}
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+    </CardContent>
+  </Card>
+);
+
+export default function PredictiveMonitoringPage() {
+  const finca = getVineyardById("1");
+
+  if (!finca) {
+    return <div className="p-8 text-center">Finca no encontrada.</div>;
+  }
+
+  // Calcular métricas de resumen
+  const avgBrix = finca.plots.reduce((sum, p) => sum + p.prediction.brix_next_7d, 0) / finca.plots.length;
+  const avgMoisture = finca.plots.reduce((sum, p) => sum + p.prediction.estimated_soil_moisture_7d, 0) / finca.plots.length;
+  const readyPlots = finca.plots.filter(p => p.prediction.harvest_status === 'Pronto').length;
+
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-background">
+      <main className="flex flex-1 flex-col gap-6 p-4 md:gap-8 md:p-8">
+        {/* SECCIÓN 1: VISTA RESUMEN GENERAL */}
+        <Card className="bg-card/70 border-border/60">
+            <div className="relative h-48 w-full">
+                 <Image
+                    src={finca.imageUrl}
+                    alt={finca.name}
+                    layout="fill"
+                    objectFit="cover"
+                    className="rounded-t-lg"
+                    data-ai-hint={finca.imageHint}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent rounded-t-lg" />
+                <div className="absolute bottom-0 left-0 p-6">
+                    <h1 className="text-3xl font-bold text-white">{finca.name}</h1>
+                    <div className="flex items-center gap-4 text-sm text-gray-300 mt-1">
+                        <div className="flex items-center gap-1"><MapPin className="h-4 w-4"/> {finca.location}</div>
+                        <div className="flex items-center gap-1"><Grape className="h-4 w-4"/> {finca.grapeVarietals}</div>
+                        <div className="flex items-center gap-1"><Sprout className="h-4 w-4"/> {finca.totalPlots} parcelas • {finca.totalArea_ha} ha</div>
+                    </div>
+                </div>
+            </div>
+            <CardContent className="p-6 grid gap-4 md:grid-cols-3">
+                 <MetricCard 
+                    title="°Brix Promedio (Predicción 7 días)"
+                    value={`${avgBrix.toFixed(1)}°`}
+                    icon={<Grape className="h-4 w-4 text-muted-foreground"/>}
+                />
+                <MetricCard 
+                    title="Humedad Suelo (Estimación 7 días)"
+                    value={`${avgMoisture.toFixed(1)}%`}
+                    icon={<Droplets className="h-4 w-4 text-muted-foreground"/>}
+                />
+                <MetricCard 
+                    title="Parcelas Listas para Cosecha"
+                    value={`${readyPlots}`}
+                    icon={<CalendarCheck className="h-4 w-4 text-muted-foreground"/>}
+                />
+            </CardContent>
+        </Card>
+
+        {/* SECCIÓN 2: TABLA CON DETALLE POR PARCELAS */}
+        <Card className="bg-card/70 border-border/60">
+          <CardHeader>
+            <CardTitle>Detalle por Parcelas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/60">
+                    <TableHead rowSpan={2} className="align-bottom">Parcela</TableHead>
+                    <TableHead colSpan={7} className="text-center border-b border-l border-r border-border/60">Datos Actuales (Sensores)</TableHead>
+                    <TableHead colSpan={4} className="text-center border-b border-l border-border/60">Predicción a 7 Días</TableHead>
+                  </TableRow>
+                  <TableRow className="border-border/60">
+                    <TableHead className="text-center border-l border-border/60">Humedad Suelo</TableHead>
+                    <TableHead className="text-center">Temperatura</TableHead>
+                    <TableHead className="text-center">pH</TableHead>
+                    <TableHead className="text-center">EC</TableHead>
+                    <TableHead className="text-center">Luz</TableHead>
+                    <TableHead className="text-center">Humedad Aire</TableHead>
+                    <TableHead className="text-center border-r border-border/60">Tendencia Semanal</TableHead>
+                    <TableHead className="text-center">°Brix Esperado</TableHead>
+                    <TableHead className="text-center">Humedad Suelo</TableHead>
+                    <TableHead className="text-center">Confianza</TableHead>
+                    <TableHead className="text-center">Estado Cosecha</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {finca.plots.map((plot) => (
+                    <TableRow key={plot.id} className="border-border/40">
+                      <TableCell className="font-bold text-center">{plot.plotNumber}</TableCell>
+                      {/* --- Datos actuales --- */}
+                      <TableCell className="text-center border-l border-border/40">{plot.iotData.soil_moisture}%</TableCell>
+                      <TableCell className="text-center">{plot.iotData.temperature}°C</TableCell>
+                      <TableCell className="text-center">{plot.iotData.ph}</TableCell>
+                      <TableCell className="text-center">{plot.iotData.ec} mS/cm</TableCell>
+                      <TableCell className="text-center">{plot.iotData.light} lux</TableCell>
+                      <TableCell className="text-center">{plot.iotData.air_humidity}%</TableCell>
+                      <TableCell className="text-center border-r border-border/40">
+                         <div className="flex flex-col items-center gap-1">
+                            <Trend value={plot.iotData.weekly_trends.soil_moisture} unit="%"/>
+                            <Trend value={plot.iotData.weekly_trends.temperature} unit="°C"/>
+                            <Trend value={plot.iotData.weekly_trends.light} unit=" lux"/>
+                         </div>
+                      </TableCell>
+                      {/* --- Predicciones --- */}
+                      <TableCell className="text-center font-semibold bg-primary/10">{plot.prediction.brix_next_7d}°</TableCell>
+                      <TableCell className="text-center bg-primary/10">{plot.prediction.estimated_soil_moisture_7d}%</TableCell>
+                      <TableCell className="text-center bg-primary/10">{(plot.prediction.confidence * 100).toFixed(0)}%</TableCell>
+                      <TableCell className="text-center bg-primary/10">
+                        <StatusBadge status={plot.prediction.harvest_status} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+}
+4. Layout y Navegación Actualizados
+Finalmente, he ajustado el layout y la navegación para que el nuevo panel sea el protagonista.
+src/app/layout.tsx
+code
+TypeScript
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import { Toaster } from "@/components/ui/toaster";
+import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "Vineyard AI - Monitoreo Predictivo",
+  description: "Monitoreo predictivo de parcelas con datos de sensores y predicciones de IA.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="es" className="dark" suppressHydrationWarning>
+      <body className={`${inter.className} antialiased`}>
+        {children}
+        <Toaster />
+      </body>
+    </html>
+  );
+}
+src/app/vineyards/layout.tsx (Header actualizado)
+code
+TypeScript
+import Link from 'next/link';
+import {
+  CircleUser,
+  Menu,
+  Wine,
+  Search,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+
+const Header: React.FC = () => (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
+            <Link href="/" className="flex items-center gap-2 text-lg font-semibold md:text-base">
+                <Wine className="h-6 w-6 text-primary" />
+                <span className="sr-only">Vineyard AI</span>
+            </Link>
+            <Link href="/" className="text-foreground transition-colors hover:text-foreground">
+                Monitoreo Predictivo
+            </Link>
+            <Link href="/vineyards" className="text-muted-foreground transition-colors hover:text-foreground">
+                Gestionar Fincas
+            </Link>
+        </nav>
+        {/* Mobile Menu */}
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="shrink-0 md:hidden">
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Toggle navigation menu</span>
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="left">
+                <nav className="grid gap-6 text-lg font-medium">
+                     <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
+                        <Wine className="h-6 w-6 text-primary" />
+                        <span className="sr-only">Vineyard AI</span>
+                    </Link>
+                    <Link href="/" className="hover:text-foreground">Monitoreo Predictivo</Link>
+                    <Link href="/vineyards" className="text-muted-foreground hover:text-foreground">Gestionar Fincas</Link>
+                </nav>
+            </SheetContent>
+        </Sheet>
+        <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
+            <form className="ml-auto flex-1 sm:flex-initial">
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Buscar parcela..."
+                        className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]"
+                    />
+                </div>
+            </form>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="secondary" size="icon" className="rounded-full">
+                        <CircleUser className="h-5 w-5" />
+                        <span className="sr-only">Toggle user menu</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>Ajustes</DropdownMenuItem>
+                    <DropdownMenuItem>Soporte</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>Cerrar Sesión</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    </header>
+);
+
+export default function VineyardsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+     <div className="flex min-h-screen w-full flex-col">
+      <Header />
+      <main className="flex flex-1 flex-col">{children}</main>
+    </div>
+  );
+}
+He mantenido el resto de los archivos (/components, tailwind.config.ts, etc.) tal como estaban, ya que los componentes de UI son robustos y se adaptan perfectamente al nuevo diseño. ¡Espero que este sea exactamente el resultado que buscabas
