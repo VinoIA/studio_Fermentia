@@ -10,7 +10,7 @@ export const initialVineyards: Vineyard[] = [
     iotData: {
       pests: false,
     },
-    imageUrl: "https://placehold.co/400x300.png",
+    imageUrl: "../imgs/1.jpg",
     imageHint: "vineyard aerial"
   },
   {
@@ -22,7 +22,7 @@ export const initialVineyards: Vineyard[] = [
      iotData: {
       pests: true,
     },
-    imageUrl: "https://placehold.co/400x300.png",
+    imageUrl: "../imgs/2.png",
     imageHint: "grapes vine"
   },
   {
@@ -34,7 +34,7 @@ export const initialVineyards: Vineyard[] = [
      iotData: {
       pests: false,
     },
-    imageUrl: "https://placehold.co/400x300.png",
+    imageUrl: "../imgs/3.jpeg",
     imageHint: "vineyard sunset"
   },
    {
@@ -46,7 +46,7 @@ export const initialVineyards: Vineyard[] = [
      iotData: {
       pests: false,
     },
-    imageUrl: "https://placehold.co/400x300.png",
+    imageUrl: "../imgs/4.png",
     imageHint: "vineyard mountain"
   },
 ];
