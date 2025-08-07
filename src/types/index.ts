@@ -27,7 +27,49 @@ export type Message = {
   id: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
+  timestamp?: number;
+  metadata?: {
+    temperament?: string;
+    confidence?: number;
+    toolsUsed?: string[];
+    executedAction?: string;
+  };
 };
+
+export type AIAction = {
+  id: string;
+  type: 'CREATE' | 'READ' | 'UPDATE' | 'DELETE';
+  entity: 'vineyard' | 'prediction' | 'user' | 'report';
+  description: string;
+  data?: any;
+  confirmation?: boolean;
+  executed?: boolean;
+  timestamp: number;
+  userId?: string;
+};
+
+export type AIRecommendation = {
+  id: string;
+  type: 'optimization' | 'warning' | 'suggestion' | 'insight';
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  data: any;
+  confidence: number;
+  timestamp: number;
+  implemented?: boolean;
+};
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  messages: Message[];
+  temperament: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type TemperamentType = 'creativo' | 'formal' | 'técnico' | 'directo' | 'amigable';
 
 export type HarvestPrediction = {
   brix_next_7d: number; // °Brix previsto a 7 días

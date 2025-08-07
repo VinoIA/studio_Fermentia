@@ -6,31 +6,18 @@ import { useState, useEffect } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Avatar,
-  AvatarFallback,
-} from "@/components/ui/avatar";
-import {
   Bot,
-  CircleUser,
   Search,
   Wine,
-  Send,
-  LoaderCircle,
   AlertTriangle,
   PlusCircle,
   TrendingUp,
   Grape,
+  CircleUser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,12 +27,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { Vineyard, Message, HarvestPrediction } from "@/types";
-import { chatWithFermentia } from "@/app/actions";
+import { AIChatModal } from "@/components/ui/ai-chat-modal";
+import { AIRecommendations } from "@/components/ui/ai-recommendations";
+import { VineyardCRUDModal } from "@/components/ui/vineyard-crud-modal";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { getVineyards, getHarvestPrediction } from "@/lib/data";
 
-const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction | null }> = ({ vineyard, prediction }) => (
+const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction | null; onEdit: () => void; onView: () => void }> = ({ vineyard, prediction, onEdit, onView }) => (
   <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-colors duration-300">
     <CardContent className="p-0">
       <div className="flex flex-col">
@@ -54,20 +42,32 @@ const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction
           <div className="flex-shrink-0 w-[150px] md:w-[200px]">
             <Image src={vineyard.imageUrl} alt={vineyard.name} data-ai-hint={vineyard.imageHint} width={200} height={150} className="w-full h-full object-cover" />
           </div>
-          <div className="p-4 flex-1 flex flex-col justify-center">
-            <h3 className="font-bold text-lg">{vineyard.name}</h3>
-            <p className="text-sm text-muted-foreground mb-2">
-              {vineyard.location}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
-            </p>
-            {vineyard.iotData.pests && (
-              <Badge variant="destructive" className="mt-2 w-fit">
-                <AlertTriangle className="mr-1 h-3 w-3" />
-                Alerta de Plaga
-              </Badge>
-            )}
+          <div className="p-4 flex-1 flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-lg">{vineyard.name}</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                {vineyard.location}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
+              </p>
+              {vineyard.iotData.pests && (
+                <Badge variant="destructive" className="mt-2 w-fit">
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  Alerta de Plaga
+                </Badge>
+              )}
+            </div>
+            
+            {/* Botones de acción */}
+            <div className="flex gap-2 mt-3">
+              <Button variant="outline" size="sm" onClick={onView} className="flex-1">
+                Ver Detalles
+              </Button>
+              <Button variant="outline" size="sm" onClick={onEdit} className="flex-1">
+                Gestionar
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -123,133 +123,6 @@ const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction
   </Card>
 );
 
-const ChatPanel: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input };
-    const newMessages = [...messages, userMessage];
-    
-    setMessages(newMessages);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const chatHistory = newMessages;
-      const response = await chatWithFermentia(chatHistory, userMessage.content);
-      const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-       console.error(error);
-       const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: "Lo siento, tengo problemas para conectarme. Por favor, inténtalo de nuevo más tarde." };
-       setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-     <Sheet>
-        <SheetTrigger asChild>
-          <Button>
-            <Bot className="h-5 w-5" />
-            <span>Habla con Fermentia</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent className="w-[400px] sm:w-[540px] bg-background p-0">
-          <SheetHeader className="p-6 border-b border-border">
-            <SheetTitle className="flex items-center gap-2">
-              <Bot className="h-6 w-6 text-primary"/>
-              <span>Fermentia, tu experto en viñedos</span>
-            </SheetTitle>
-          </SheetHeader>
-          <div className="flex flex-col h-[calc(100%-76px)]">
-            <ScrollArea className="flex-1 p-6">
-              <div className="space-y-4">
-                 {messages.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
-                    <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
-                    <h3 className="font-semibold text-lg text-foreground mb-2">¡Bienvenido a Fermentia!</h3>
-                    <p className="text-sm">¡Pregúntame sobre tus viñedos y predicciones de cosecha!</p>
-                    <p className="text-xs mt-2">ej: "¿Cuáles son las predicciones de °Brix?" o "¿Cuándo cosechar Finca Roble Alto?"</p>
-                  </div>
-                )}
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex items-start gap-3 ${
-                      message.role === "user" ? "justify-end" : ""
-                    }`}
-                  >
-                    {message.role === "assistant" && (
-                      <Avatar className="h-8 w-8 border-2 border-primary">
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          <Bot />
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                    <div
-                      className={`max-w-[75%] rounded-lg p-3 text-sm ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      }`}
-                    >
-                      {message.content}
-                    </div>
-                     {message.role === "user" && (
-                       <Avatar className="h-8 w-8">
-                        <AvatarFallback>
-                          <CircleUser />
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="flex items-start gap-3">
-                     <Avatar className="h-8 w-8 border-2 border-primary">
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          <Bot />
-                        </AvatarFallback>
-                      </Avatar>
-                     <div className="bg-muted rounded-lg p-3 flex items-center">
-                        <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                     </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-            <div className="p-4 border-t border-border bg-background">
-              <form onSubmit={handleSendMessage} className="relative">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Pregúntale a Fermentia..."
-                  className="pr-12 bg-muted focus:bg-background"
-                  disabled={isLoading}
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8"
-                  disabled={isLoading || !input.trim()}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </form>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-  )
-}
-
 const Header: React.FC = () => (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
         <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
@@ -296,21 +169,62 @@ const Header: React.FC = () => (
 );
 
 export default function DashboardPage() {
-  const [vineyards] = useState<Vineyard[]>(getVineyards());
+  const [vineyards, setVineyards] = useState<Vineyard[]>([]);
   const [predictions, setPredictions] = useState<{ [key: string]: HarvestPrediction | null }>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCRUDModal, setShowCRUDModal] = useState(false);
+  const [selectedVineyard, setSelectedVineyard] = useState<Vineyard | null>(null);
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete' | 'view'>('view');
   
   useEffect(() => {
-    // Cargar predicciones para todos los viñedos
-    const loadPredictions = () => {
-      const newPredictions: { [key: string]: HarvestPrediction | null } = {};
-      vineyards.forEach(vineyard => {
-        newPredictions[vineyard.id] = getHarvestPrediction(vineyard.id);
-      });
-      setPredictions(newPredictions);
+    // Cargar datos en el cliente para evitar hidratación problems
+    const loadData = async () => {
+      try {
+        const vineyardData = getVineyards();
+        setVineyards(vineyardData);
+        
+        // Cargar predicciones para todos los viñedos
+        const newPredictions: { [key: string]: HarvestPrediction | null } = {};
+        vineyardData.forEach(vineyard => {
+          newPredictions[vineyard.id] = getHarvestPrediction(vineyard.id);
+        });
+        setPredictions(newPredictions);
+      } catch (error) {
+        console.error('Error cargando datos:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     
-    loadPredictions();
-  }, [vineyards]);
+    loadData();
+  }, []);
+
+  const handleCRUDSuccess = () => {
+    // Recargar datos después de operaciones CRUD
+    const vineyardData = getVineyards();
+    setVineyards(vineyardData);
+    setSelectedVineyard(null);
+  };
+
+  const openCRUDModal = (mode: 'create' | 'edit' | 'delete' | 'view', vineyard?: Vineyard) => {
+    setModalMode(mode);
+    setSelectedVineyard(vineyard || null);
+    setShowCRUDModal(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen w-full flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p>Cargando dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -319,7 +233,14 @@ export default function DashboardPage() {
             <div className="flex items-center">
                 <h1 className="text-lg font-semibold md:text-2xl">Resumen de Viñedos</h1>
                 <div className="ml-auto flex items-center gap-2">
-                    <ChatPanel />
+                    <AIChatModal 
+                      trigger={
+                        <Button variant="outline" className="gap-2">
+                          <Bot className="h-4 w-4" />
+                          Chat con IA
+                        </Button>
+                      }
+                    />
                 </div>
             </div>
             
@@ -387,17 +308,45 @@ export default function DashboardPage() {
                     <VineyardCard 
                       key={vineyard.id} 
                       vineyard={vineyard} 
-                      prediction={predictions[vineyard.id]} 
+                      prediction={predictions[vineyard.id]}
+                      onView={() => openCRUDModal('view', vineyard)}
+                      onEdit={() => openCRUDModal('edit', vineyard)}
                     />
                 ))}
-                 <Link href="/vineyards/new">
-                    <Card className="flex flex-col items-center justify-center h-full border-2 border-dashed hover:border-primary/80 hover:bg-muted/50 transition-colors duration-300 cursor-pointer">
-                        <CardContent className="flex flex-col items-center justify-center p-6">
-                            <PlusCircle className="h-12 w-12 text-muted-foreground" />
-                            <p className="mt-4 text-center font-semibold">Añadir Nuevo Viñedo</p>
-                        </CardContent>
-                    </Card>
-                </Link>
+                 <Card 
+                    onClick={() => openCRUDModal('create')}
+                    className="flex flex-col items-center justify-center h-full border-2 border-dashed hover:border-primary/80 hover:bg-muted/50 transition-colors duration-300 cursor-pointer"
+                 >
+                    <CardContent className="flex flex-col items-center justify-center p-6">
+                        <PlusCircle className="h-12 w-12 text-muted-foreground" />
+                        <p className="mt-4 text-center font-semibold">Añadir Nuevo Viñedo</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Recomendaciones de IA */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <AIRecommendations />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Configuración de IA</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    La IA analiza continuamente tus datos para generar recomendaciones inteligentes.
+                  </p>
+                  <div className="flex gap-2">
+                    <AIChatModal 
+                      trigger={
+                        <Button variant="outline" size="sm">
+                          <Bot className="h-4 w-4 mr-2" />
+                          Configurar IA
+                        </Button>
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
              <div className="space-y-4">
@@ -408,6 +357,15 @@ export default function DashboardPage() {
               </div>
 
         </main>
+
+        {/* Modal CRUD */}
+        <VineyardCRUDModal
+          isOpen={showCRUDModal}
+          onClose={() => setShowCRUDModal(false)}
+          vineyard={selectedVineyard}
+          mode={modalMode}
+          onSuccess={handleCRUDSuccess}
+        />
     </div>
   );
 }
