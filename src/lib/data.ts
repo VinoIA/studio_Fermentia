@@ -10,7 +10,7 @@ export const initialVineyards: Vineyard[] = [
     iotData: {
       pests: false,
     },
-    imageUrl: "../imgs/1.jpg",
+    imageUrl: "/imgs/1.jpg",
     imageHint: "vineyard aerial"
   },
   {
@@ -22,7 +22,7 @@ export const initialVineyards: Vineyard[] = [
      iotData: {
       pests: true,
     },
-    imageUrl: "../imgs/2.png",
+    imageUrl: "/imgs/2.png",
     imageHint: "grapes vine"
   },
   {
@@ -34,7 +34,7 @@ export const initialVineyards: Vineyard[] = [
      iotData: {
       pests: false,
     },
-    imageUrl: "../imgs/3.jpeg",
+    imageUrl: "/imgs/3.jpeg",
     imageHint: "vineyard sunset"
   },
    {
@@ -46,7 +46,7 @@ export const initialVineyards: Vineyard[] = [
      iotData: {
       pests: false,
     },
-    imageUrl: "../imgs/4.png",
+    imageUrl: "/imgs/4.png",
     imageHint: "vineyard mountain"
   },
 ];
