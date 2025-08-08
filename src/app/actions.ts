@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { chatWithOpenAI, getAILogs, getChatSession, confirmAndExecuteAction } from "@/ai/flows/openai-chat-flow";
-import { addVineyard as addVineyardDB } from "@/lib/data";
+import { createVineyard as createVineyardAPI } from "@/lib/api";
 import type { Message } from "@/types";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -114,22 +114,24 @@ export async function getChatSessionData(sessionId: string) {
 
 
 const vineyardSchema = z.object({
-    name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
-    location: z.string().min(3, "La ubicación debe tener al menos 3 caracteres."),
-    grapeVarietals: z.string().min(3, "Las variedades de uva deben tener al menos 3 caracteres."),
-    totalPlots: z.coerce.number().int().positive("El número de parcelas debe ser positivo."),
-    imageUrl: z.string().url("La URL de la imagen no es válida."),
-    imageHint: z.string().optional(),
+    nombre: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
+    ubicacion: z.string().min(3, "La ubicación debe tener al menos 3 caracteres."),
+    variedadUva: z.string().min(3, "Las variedades de uva deben tener al menos 3 caracteres."),
+    estadoCosecha: z.string().min(3, "El estado de cosecha es requerido."),
+    temperatura: z.coerce.number().int().min(-10).max(50, "La temperatura debe estar entre -10 y 50°C."),
+    humedad: z.coerce.number().int().min(0).max(100, "La humedad debe estar entre 0 y 100%."),
+    fechaCosecha: z.string().min(10, "La fecha de cosecha es requerida."),
 });
 
 export async function addVineyard(prevState: any, formData: FormData) {
     const validatedFields = vineyardSchema.safeParse({
-        name: formData.get('name'),
-        location: formData.get('location'),
-        grapeVarietals: formData.get('grapeVarietals'),
-        totalPlots: formData.get('totalPlots'),
-        imageUrl: formData.get('imageUrl'),
-        imageHint: formData.get('imageHint'),
+        nombre: formData.get('nombre'),
+        ubicacion: formData.get('ubicacion'),
+        variedadUva: formData.get('variedadUva'),
+        estadoCosecha: formData.get('estadoCosecha'),
+        temperatura: formData.get('temperatura'),
+        humedad: formData.get('humedad'),
+        fechaCosecha: formData.get('fechaCosecha'),
     });
 
     if (!validatedFields.success) {
@@ -142,9 +144,8 @@ export async function addVineyard(prevState: any, formData: FormData) {
     try {
         const vineyard = {
             ...validatedFields.data,
-            imageHint: validatedFields.data.imageHint || '',
         };
-        addVineyardDB(vineyard);
+        await createVineyardAPI(vineyard);
     } catch (error) {
         return {
             message: 'Error en la base de datos: No se pudo crear el viñedo.',
