@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeDataAndRecommend } from '@/ai/tools/crud-tools';
+import { generateVineyardRecommendations } from '@/ai/openai';
 
 const API_BASE_URL = 'https://6895921e039a1a2b288f86c2.mockapi.io/vinedos';
+
+// Tipos para las recomendaciones
+interface Recommendation {
+  id: string;
+  type: string;
+  priority: 'alta' | 'media' | 'baja';
+  title: string;
+  description: string;
+  action: string;
+  vineyard: string;
+  location: string;
+  category?: string;
+  pestType?: string;
+  riskLevel?: string;
+  specific?: boolean;
+}
 
 // Función para obtener datos de la API real
 async function fetchVineyardsFromAPI() {
@@ -11,7 +27,7 @@ async function fetchVineyardsFromAPI() {
       headers: {
         'Content-Type': 'application/json',
       },
-      cache: 'no-store', // Para obtener datos frescos siempre
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -26,199 +42,257 @@ async function fetchVineyardsFromAPI() {
   }
 }
 
-// Función para generar recomendaciones basadas en datos reales
-function generateSmartRecommendations(vineyards: any[]) {
-  const recommendations = [];
-  const now = new Date();
+// Función para detectar y generar alertas de plagas
+function generatePestAlerts(vineyards: any[]): Recommendation[] {
+  const pestAlerts: Recommendation[] = [];
   
-  // Analizar cada viñedo
   vineyards.forEach((vineyard) => {
-    // Recomendaciones por temperatura
-    if (vineyard.temperatura > 30) {
-      recommendations.push({
-        id: `temp-${vineyard.id}`,
+    const vineyardName = vineyard.nombre || 'Viñedo sin nombre';
+    const location = vineyard.ubicacion || 'Ubicación desconocida';
+    const temp = vineyard.temperatura || 0;
+    const humidity = vineyard.humedad || 0;
+
+    // Condiciones favorables para diferentes plagas
+    
+    // Pulgón (Aphids) - Alta humedad y temperatura moderada
+    if (humidity > 70 && temp >= 20 && temp <= 28) {
+      pestAlerts.push({
+        id: `pest-aphid-${vineyard.id}`,
         type: 'warning',
         priority: 'alta',
-        title: `Temperatura alta en ${vineyard.nombre}`,
-        description: `La temperatura de ${vineyard.temperatura}°C está por encima del rango óptimo. Considere aumentar el riego.`,
-        action: 'Incrementar frecuencia de riego',
-        vineyard: vineyard.nombre,
-        location: vineyard.ubicacion
-      });
-    } else if (vineyard.temperatura < 15) {
-      recommendations.push({
-        id: `temp-low-${vineyard.id}`,
-        type: 'info',
-        priority: 'media',
-        title: `Temperatura baja en ${vineyard.nombre}`,
-        description: `La temperatura de ${vineyard.temperatura}°C podría afectar la maduración. Monitorear de cerca.`,
-        action: 'Monitorear desarrollo de la uva',
-        vineyard: vineyard.nombre,
-        location: vineyard.ubicacion
+        title: `🐛 Riesgo de pulgones en ${vineyardName}`,
+        description: `Condiciones favorables: ${temp}°C y ${humidity}% humedad para pulgones`,
+        action: 'Aplicar tratamiento preventivo con aceite neem o insecticida biológico',
+        vineyard: vineyardName,
+        location: location,
+        pestType: 'pulgon',
+        riskLevel: 'alto'
       });
     }
 
-    // Recomendaciones por humedad
-    if (vineyard.humedad > 80) {
-      recommendations.push({
-        id: `humid-${vineyard.id}`,
+    // Araña roja - Temperatura alta y baja humedad
+    if (temp > 30 && humidity < 50) {
+      pestAlerts.push({
+        id: `pest-spider-${vineyard.id}`,
         type: 'warning',
         priority: 'alta',
-        title: `Humedad alta en ${vineyard.nombre}`,
-        description: `La humedad de ${vineyard.humedad}% puede favorecer enfermedades fúngicas.`,
-        action: 'Mejorar ventilación y aplicar fungicidas preventivos',
-        vineyard: vineyard.nombre,
-        location: vineyard.ubicacion
-      });
-    } else if (vineyard.humedad < 40) {
-      recommendations.push({
-        id: `humid-low-${vineyard.id}`,
-        type: 'info',
-        priority: 'media',
-        title: `Humedad baja en ${vineyard.nombre}`,
-        description: `La humedad de ${vineyard.humedad}% podría causar estrés hídrico.`,
-        action: 'Considerar riego adicional',
-        vineyard: vineyard.nombre,
-        location: vineyard.ubicacion
+        title: `🕷️ Alerta de araña roja en ${vineyardName}`,
+        description: `Temperatura ${temp}°C y humedad ${humidity}% favorecen araña roja`,
+        action: 'Incrementar humedad ambiental y aplicar acaricida específico',
+        vineyard: vineyardName,
+        location: location,
+        pestType: 'arana_roja',
+        riskLevel: 'alto'
       });
     }
 
-    // Recomendaciones por estado de cosecha
-    if (vineyard.estadoCosecha === 'En progreso') {
-      const harvestDate = new Date(vineyard.fechaCosecha);
-      const daysUntilHarvest = Math.ceil((harvestDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilHarvest <= 7 && daysUntilHarvest > 0) {
-        recommendations.push({
-          id: `harvest-soon-${vineyard.id}`,
-          type: 'success',
-          priority: 'alta',
-          title: `Cosecha próxima en ${vineyard.nombre}`,
-          description: `La cosecha está programada en ${daysUntilHarvest} días. Preparar equipos y personal.`,
-          action: 'Preparar logística de cosecha',
-          vineyard: vineyard.nombre,
-          location: vineyard.ubicacion
-        });
-      }
-    } else if (vineyard.estadoCosecha === 'Pendiente') {
-      recommendations.push({
-        id: `harvest-pending-${vineyard.id}`,
-        type: 'info',
+    // Trips - Condiciones secas y calurosas
+    if (temp > 28 && humidity < 60) {
+      pestAlerts.push({
+        id: `pest-thrips-${vineyard.id}`,
+        type: 'warning',
         priority: 'media',
-        title: `Cosecha pendiente en ${vineyard.nombre}`,
-        description: `Monitorear condiciones para determinar momento óptimo de cosecha.`,
-        action: 'Continuar monitoreo de maduración',
-        vineyard: vineyard.nombre,
-        location: vineyard.ubicacion
+        title: `🦟 Riesgo de trips en ${vineyardName}`,
+        description: `Condiciones secas (${humidity}%) y temperatura ${temp}°C favorecen trips`,
+        action: 'Monitorear hojas jóvenes y aplicar trampas azules',
+        vineyard: vineyardName,
+        location: location,
+        pestType: 'trips',
+        riskLevel: 'medio'
       });
     }
 
-    // Recomendaciones por variedad de uva
-    if (vineyard.variedadUva === 'Malbec' && vineyard.temperatura > 28) {
-      recommendations.push({
-        id: `malbec-${vineyard.id}`,
+    // Mildiu - Alta humedad y temperatura moderada
+    if (humidity > 80 && temp >= 15 && temp <= 25) {
+      pestAlerts.push({
+        id: `pest-mildew-${vineyard.id}`,
+        type: 'warning',
+        priority: 'alta',
+        title: `🍄 Riesgo de mildiu en ${vineyardName}`,
+        description: `Humedad ${humidity}% y temperatura ${temp}°C ideales para mildiu`,
+        action: 'Aplicar fungicida preventivo (cobre o sistémico) urgente',
+        vineyard: vineyardName,
+        location: location,
+        pestType: 'mildiu',
+        riskLevel: 'alto'
+      });
+    }
+
+    // Oídio - Temperatura moderada
+    if (temp >= 20 && temp <= 27) {
+      pestAlerts.push({
+        id: `pest-powdery-${vineyard.id}`,
         type: 'info',
         priority: 'media',
-        title: `Condiciones óptimas para Malbec en ${vineyard.nombre}`,
-        description: `Las condiciones actuales son favorables para la variedad Malbec.`,
-        action: 'Mantener condiciones actuales',
-        vineyard: vineyard.nombre,
-        location: vineyard.ubicacion
+        title: `⚪ Vigilar oídio en ${vineyardName}`,
+        description: `Temperatura ${temp}°C favorable para desarrollo de oídio`,
+        action: 'Inspeccionar hojas regularmente y mantener ventilación',
+        vineyard: vineyardName,
+        location: location,
+        pestType: 'oidio',
+        riskLevel: 'medio'
       });
     }
   });
 
-  // Recomendaciones generales
-  const avgTemp = vineyards.reduce((sum: number, v: any) => sum + v.temperatura, 0) / vineyards.length;
-  const avgHumidity = vineyards.reduce((sum: number, v: any) => sum + v.humedad, 0) / vineyards.length;
+  return pestAlerts;
+}
+
+// Función para generar recomendaciones específicas de cuidado
+function generateCareRecommendations(vineyards: any[]): Recommendation[] {
+  const recommendations: Recommendation[] = [];
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
   
-  if (avgTemp > 27) {
-    recommendations.push({
-      id: 'general-temp',
-      type: 'warning',
-      priority: 'media',
-      title: 'Temperatura promedio elevada',
-      description: `La temperatura promedio de ${avgTemp.toFixed(1)}°C está elevada en todos los viñedos.`,
-      action: 'Revisar sistema de riego general',
-      vineyard: 'Todos los viñedos',
-      location: 'General'
-    });
-  }
+  vineyards.forEach((vineyard) => {
+    const vineyardName = vineyard.nombre || 'Viñedo sin nombre';
+    const location = vineyard.ubicacion || 'Ubicación desconocida';
+    const temp = vineyard.temperatura || 0;
+    const humidity = vineyard.humedad || 0;
+    const harvestStatus = vineyard.estadoCosecha || 'Desconocido';
+    const grapeVariety = vineyard.variedadUva || 'Variedad desconocida';
+
+    // Recomendaciones de riego basadas en temperatura y humedad
+    if (temp > 32) {
+      recommendations.push({
+        id: `care-irrigation-hot-${vineyard.id}`,
+        type: 'care',
+        priority: 'alta',
+        title: `💧 Riego intensivo para ${vineyardName}`,
+        description: `Temperatura ${temp}°C requiere riego frecuente para evitar estrés hídrico`,
+        action: 'Regar 2-3 veces por semana en horas tempranas (6-8 AM)',
+        vineyard: vineyardName,
+        location: location,
+        category: 'riego'
+      });
+    } else if (temp > 28) {
+      recommendations.push({
+        id: `care-irrigation-warm-${vineyard.id}`,
+        type: 'care',
+        priority: 'media',
+        title: `🚿 Riego moderado para ${vineyardName}`,
+        description: `Mantener humedad del suelo constante con ${temp}°C`,
+        action: 'Riego por goteo 1-2 veces por semana',
+        vineyard: vineyardName,
+        location: location,
+        category: 'riego'
+      });
+    }
+
+    // Recomendaciones de poda según época
+    if (currentMonth >= 6 && currentMonth <= 8) { // Invierno en hemisferio sur
+      recommendations.push({
+        id: `care-pruning-${vineyard.id}`,
+        type: 'care',
+        priority: 'alta',
+        title: `✂️ Época de poda para ${vineyardName}`,
+        description: `Período ideal para poda de ${grapeVariety}`,
+        action: 'Realizar poda de formación y eliminación de madera vieja',
+        vineyard: vineyardName,
+        location: location,
+        category: 'poda'
+      });
+    }
+
+    // Recomendaciones de fertilización
+    if (currentMonth >= 9 && currentMonth <= 11) { // Primavera
+      recommendations.push({
+        id: `care-fertilization-${vineyard.id}`,
+        type: 'care',
+        priority: 'media',
+        title: `🌱 Fertilización primaveral - ${vineyardName}`,
+        description: `Aplicar nutrientes para brotación de ${grapeVariety}`,
+        action: 'Fertilizar con NPK 10-10-10 y micronutrientes',
+        vineyard: vineyardName,
+        location: location,
+        category: 'fertilizacion'
+      });
+    }
+
+    // Recomendaciones de manejo del dosel
+    if (currentMonth >= 11 && currentMonth <= 2) { // Primavera-Verano
+      recommendations.push({
+        id: `care-canopy-${vineyard.id}`,
+        type: 'care',
+        priority: 'media',
+        title: `🍃 Manejo del dosel - ${vineyardName}`,
+        description: `Controlar crecimiento vegetativo para mejorar ventilación`,
+        action: 'Deshoje selectivo y atado de brotes',
+        vineyard: vineyardName,
+        location: location,
+        category: 'dosel'
+      });
+    }
+
+    // Recomendaciones específicas por variedad
+    if (grapeVariety.toLowerCase().includes('malbec')) {
+      recommendations.push({
+        id: `care-malbec-${vineyard.id}`,
+        type: 'care',
+        priority: 'baja',
+        title: `🍇 Cuidado específico Malbec - ${vineyardName}`,
+        description: `Malbec requiere exposición solar controlada`,
+        action: 'Mantener hojas que protejan racimos del sol directo',
+        vineyard: vineyardName,
+        location: location,
+        category: 'varietal'
+      });
+    }
+
+    // Control de malezas
+    if (currentMonth >= 9 && currentMonth <= 12) {
+      recommendations.push({
+        id: `care-weeds-${vineyard.id}`,
+        type: 'care',
+        priority: 'media',
+        title: `🌿 Control de malezas - ${vineyardName}`,
+        description: `Época de crecimiento activo de malezas`,
+        action: 'Aplicar herbicida selectivo o cultivar mecánicamente',
+        vineyard: vineyardName,
+        location: location,
+        category: 'malezas'
+      });
+    }
+  });
 
   return recommendations;
 }
 
-export async function POST(request: NextRequest) {
+// GET - Obtener recomendaciones y alertas
+export async function GET() {
   try {
-    const body = await request.json();
-    const { dataType = 'vineyard', context } = body;
-
+    console.log('📊 Iniciando generación de recomendaciones y alertas...');
+    
     // Obtener datos reales de la API
     const vineyards = await fetchVineyardsFromAPI();
-    console.log('📊 Datos obtenidos de la API:', vineyards.length, 'viñedos');
+    console.log(`📊 Datos obtenidos: ${vineyards.length} viñedos`);
 
-    // Generar recomendaciones inteligentes basadas en datos reales
-    const smartRecommendations = generateSmartRecommendations(vineyards);
+    // Generar alertas de plagas
+    const pestAlerts = generatePestAlerts(vineyards);
+    console.log(`🐛 Generadas ${pestAlerts.length} alertas de plagas`);
+
+    // Generar recomendaciones de cuidado
+    const careRecommendations = generateCareRecommendations(vineyards);
+    console.log(`🌱 Generadas ${careRecommendations.length} recomendaciones de cuidado`);
+
+    // Combinar todas las recomendaciones
+    const allRecommendations = [...pestAlerts, ...careRecommendations];
     
-    // También usar la herramienta de IA si se proporciona contexto específico
-    let aiRecommendations = [];
-    if (context) {
-      const aiResult = await analyzeDataAndRecommend({
-        dataType,
-        context: {
-          ...context,
-          vineyards: vineyards // Pasar datos reales a la IA
-        }
-      });
-      
-      if (aiResult.success && aiResult.data?.recommendations) {
-        aiRecommendations = aiResult.data.recommendations;
-      }
-    }
-
-    // Combinar recomendaciones
-    const allRecommendations = [...smartRecommendations, ...aiRecommendations];
+    // Estadísticas
     const highPriorityCount = allRecommendations.filter(r => r.priority === 'alta').length;
+    const pestCount = pestAlerts.length;
+    const careCount = careRecommendations.length;
 
     return NextResponse.json({
       success: true,
       recommendations: allRecommendations,
-      summary: `Se generaron ${allRecommendations.length} recomendaciones basadas en ${vineyards.length} viñedos`,
+      pestAlerts: pestAlerts,
+      careRecommendations: careRecommendations,
+      summary: `Generadas ${allRecommendations.length} recomendaciones: ${pestCount} alertas de plagas y ${careCount} consejos de cuidado`,
       stats: { 
-        total: allRecommendations.length, 
-        highPriority: highPriorityCount,
-        vineyards: vineyards.length,
-        avgTemperature: (vineyards.reduce((sum: number, v: any) => sum + v.temperatura, 0) / vineyards.length).toFixed(1),
-        avgHumidity: (vineyards.reduce((sum: number, v: any) => sum + v.humedad, 0) / vineyards.length).toFixed(1)
-      }
-    });
-
-  } catch (error) {
-    console.error('Error en API de recomendaciones:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor al obtener recomendaciones', details: error instanceof Error ? error.message : 'Error desconocido' },
-      { status: 500 }
-    );
-  }
-}
-
-// Método GET para obtener recomendaciones sin parámetros
-export async function GET() {
-  try {
-    // Obtener datos reales de la API
-    const vineyards = await fetchVineyardsFromAPI();
-    console.log('📊 Datos obtenidos de la API (GET):', vineyards.length, 'viñedos');
-
-    // Generar recomendaciones inteligentes basadas en datos reales
-    const recommendations = generateSmartRecommendations(vineyards);
-    const highPriorityCount = recommendations.filter(r => r.priority === 'alta').length;
-
-    return NextResponse.json({
-      success: true,
-      recommendations: recommendations,
-      summary: `Se obtuvieron ${recommendations.length} recomendaciones basadas en ${vineyards.length} viñedos`,
-      stats: { 
-        total: recommendations.length, 
+        total: allRecommendations.length,
+        pestAlerts: pestCount,
+        careRecommendations: careCount,
         highPriority: highPriorityCount,
         vineyards: vineyards.length,
         avgTemperature: vineyards.length > 0 ? (vineyards.reduce((sum: number, v: any) => sum + v.temperatura, 0) / vineyards.length).toFixed(1) : '0',
@@ -227,10 +301,125 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('Error en API de recomendaciones (GET):', error);
+    console.error('❌ Error en API de recomendaciones:', error);
     return NextResponse.json(
-      { error: 'Error interno del servidor al obtener recomendaciones', details: error instanceof Error ? error.message : 'Error desconocido' },
+      { 
+        success: false,
+        error: 'Error interno del servidor al obtener recomendaciones', 
+        details: error instanceof Error ? error.message : 'Error desconocido' 
+      },
       { status: 500 }
     );
   }
+}
+
+// POST - Generar recomendaciones con IA para viñedo específico
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { vineyardId, context } = body;
+
+    console.log('🤖 Generando recomendaciones con IA...');
+    
+    // Obtener datos de viñedos
+    const vineyards = await fetchVineyardsFromAPI();
+    
+    let targetVineyard = null;
+    if (vineyardId) {
+      targetVineyard = vineyards.find((v: any) => v.id.toString() === vineyardId.toString());
+    }
+
+    // Usar IA para recomendaciones específicas
+    let aiRecommendations: Recommendation[] = [];
+    try {
+      const vineyardContext = targetVineyard || 'Análisis general de viñedos';
+      const aiResult = await generateVineyardRecommendations(vineyardContext, context);
+      
+      if (aiResult && typeof aiResult === 'string') {
+        aiRecommendations = [{
+          id: `ai-recommendation-${Date.now()}`,
+          type: 'ai',
+          priority: 'media',
+          title: '🤖 Recomendación IA',
+          description: aiResult,
+          action: 'Seguir las recomendaciones de la IA',
+          vineyard: targetVineyard?.nombre || 'General',
+          location: targetVineyard?.ubicacion || 'Múltiples ubicaciones',
+          category: 'ia'
+        }];
+      } else if (aiResult && typeof aiResult === 'object' && aiResult.success) {
+        aiRecommendations = [{
+          id: `ai-recommendation-${Date.now()}`,
+          type: 'ai',
+          priority: 'media',
+          title: '🤖 Recomendación IA',
+          description: aiResult.summary || 'Recomendación generada por IA',
+          action: 'Seguir las recomendaciones de la IA',
+          vineyard: targetVineyard?.nombre || 'General',
+          location: targetVineyard?.ubicacion || 'Múltiples ubicaciones',
+          category: 'ia'
+        }];
+      }
+    } catch (aiError) {
+      console.error('⚠️ Error en IA, continuando con recomendaciones básicas:', aiError);
+    }
+
+    // Generar también recomendaciones básicas
+    const pestAlerts = generatePestAlerts(vineyards);
+    const careRecommendations = generateCareRecommendations(vineyards);
+    
+    // Filtrar por viñedo específico si se proporciona
+    let filteredPestAlerts = pestAlerts;
+    let filteredCareRecommendations = careRecommendations;
+    
+    if (vineyardId && targetVineyard) {
+      filteredPestAlerts = pestAlerts.filter(alert => alert.vineyard === targetVineyard.nombre);
+      filteredCareRecommendations = careRecommendations.filter(rec => rec.vineyard === targetVineyard.nombre);
+    }
+
+    const allRecommendations = [...aiRecommendations, ...filteredPestAlerts, ...filteredCareRecommendations];
+
+    return NextResponse.json({
+      success: true,
+      recommendations: allRecommendations,
+      aiRecommendations: aiRecommendations,
+      pestAlerts: filteredPestAlerts,
+      careRecommendations: filteredCareRecommendations,
+      targetVineyard: targetVineyard,
+      summary: `Generadas ${allRecommendations.length} recomendaciones${targetVineyard ? ` para ${targetVineyard.nombre}` : ' generales'}`,
+      stats: {
+        total: allRecommendations.length,
+        ai: aiRecommendations.length,
+        pests: filteredPestAlerts.length,
+        care: filteredCareRecommendations.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error en POST de recomendaciones:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: 'Error al generar recomendaciones específicas', 
+        details: error instanceof Error ? error.message : 'Error desconocido' 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Actualizar configuración de alertas (futuro)
+export async function PUT(request: NextRequest) {
+  return NextResponse.json({
+    success: false,
+    error: 'Método PUT no implementado aún'
+  }, { status: 501 });
+}
+
+// DELETE - Eliminar alertas específicas (futuro)
+export async function DELETE(request: NextRequest) {
+  return NextResponse.json({
+    success: false,
+    error: 'Método DELETE no implementado aún'
+  }, { status: 501 });
 }
