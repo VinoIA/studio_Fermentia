@@ -1,17 +1,23 @@
 [build]
-  command = "npm install --legacy-peer-deps && npm run build"
+  command = "npm ci --legacy-peer-deps && npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "18"
+  NPM_VERSION = "9"
   NEXT_TELEMETRY_DISABLED = "1"
   NPM_FLAGS = "--legacy-peer-deps"
+  NETLIFY_NEXT_PLUGIN_SKIP = "false"
+  # Forzar instalación limpia
+  NPM_CONFIG_FUND = "false"
+  NPM_CONFIG_AUDIT = "false"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
 [functions]
   node_bundler = "esbuild"
+  included_files = ["src/**", "public/**"]
 
 # Environment variables for production
 [context.production.environment]
