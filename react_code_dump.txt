@@ -237,48 +237,37 @@ const harvestPredictionTool = ai.defineTool(
   },
   async (input) => {
     if (input?.vineyardName) {
-      // Buscar el ID del viñedo por nombre
-      const vineyards = getVineyardData();
-      const vineyard = Array.isArray(vineyards) ? 
-        vineyards.find(v => v.nombre.toLowerCase().includes(input.vineyardName!.toLowerCase())) :
-        null;
+      // Usar getVineyards() para obtener los objetos completos del viñedo
+      const vineyards = getVineyards();
+      const vineyard = vineyards.find(v => v.name.toLowerCase().includes(input.vineyardName!.toLowerCase()));
       
       if (!vineyard) {
         return { error: "Viñedo no encontrado para predicciones" };
       }
       
-      // Encontrar el ID real del viñedo
-      const allVineyards = getVineyardData();
-      const vineyardId = Array.isArray(allVineyards) ? 
-        allVineyards.findIndex(v => v.nombre === vineyard.nombre) + 1 : 
-        null;
-      
-      if (!vineyardId) {
-        return { error: "No se pudo obtener ID del viñedo" };
-      }
-      
-      const prediction = getHarvestPrediction(vineyardId.toString());
+      // Usar el ID directamente del objeto del viñedo
+      const prediction = getHarvestPrediction(vineyard.id);
       return {
-        viñedo: vineyard.nombre,
+        viñedo: vineyard.name,
         prediccion: prediction
       };
     } else {
       // Devolver todas las predicciones
       const allPredictions = getAllHarvestPredictions();
-      const vineyardData = getVineyardData();
+      const vineyardData = getVineyards();
       
       if (!Array.isArray(vineyardData)) {
         return { error: "Error al obtener datos de viñedos" };
       }
       
-      return vineyardData.map((v, index) => ({
-        nombre: v.nombre,
-        ubicacion: v.ubicacion,
-        prediccion_brix: allPredictions[(index + 1).toString()]?.brix_next_7d,
-        prediccion_rendimiento: allPredictions[(index + 1).toString()]?.yield_final,
-        recomendacion: allPredictions[(index + 1).toString()]?.harvest_recommendation,
-        confianza_brix: allPredictions[(index + 1).toString()]?.confidence_brix,
-        confianza_rendimiento: allPredictions[(index + 1).toString()]?.confidence_yield
+      return vineyardData.map((v) => ({
+        nombre: v.name,
+        ubicacion: v.location,
+        prediccion_brix: allPredictions[v.id]?.brix_next_7d,
+        prediccion_rendimiento: allPredictions[v.id]?.yield_final,
+        recomendacion: allPredictions[v.id]?.harvest_recommendation,
+        confianza_brix: allPredictions[v.id]?.confidence_brix,
+        confianza_rendimiento: allPredictions[v.id]?.confidence_yield
       }));
     }
   }
@@ -331,63 +320,6 @@ const plotDetailsTool = ai.defineTool(
     };
   }
 );
-  {
-    name: 'getHarvestPredictions',
-    description: 'Obtener predicciones de cosecha incluyendo Brix, rendimiento y recomendaciones para un viñedo específico o todos los viñedos.',
-    inputSchema: z.object({
-      vineyardName: z.string().optional().describe('El nombre de un viñedo específico. Si no se proporciona, devuelve predicciones para todos.'),
-    }),
-    outputSchema: z.any(),
-  }
-  async (input) => {
-    if (input?.vineyardName) {
-      // Buscar el ID del viñedo por nombre
-      const vineyards = getVineyardData();
-      const vineyard = Array.isArray(vineyards) ? 
-        vineyards.find(v => v.nombre.toLowerCase().includes(input.vineyardName!.toLowerCase())) :
-        null;
-      
-      if (!vineyard) {
-        return { error: "Viñedo no encontrado para predicciones" };
-      }
-      
-      // Encontrar el ID real del viñedo
-      const allVineyards = getVineyardData();
-      const vineyardId = Array.isArray(allVineyards) ? 
-        allVineyards.findIndex(v => v.nombre === vineyard.nombre) + 1 : 
-        null;
-      
-      if (!vineyardId) {
-        return { error: "No se pudo obtener ID del viñedo" };
-      }
-      
-      const prediction = getHarvestPrediction(vineyardId.toString());
-      return {
-        viñedo: vineyard.nombre,
-        prediccion: prediction
-      };
-    } else {
-      // Devolver todas las predicciones
-      const allPredictions = getAllHarvestPredictions();
-      const vineyardData = getVineyardData();
-      
-      if (!Array.isArray(vineyardData)) {
-        return { error: "Error al obtener datos de viñedos" };
-      }
-      
-      return vineyardData.map((v, index) => ({
-        nombre: v.nombre,
-        ubicacion: v.ubicacion,
-        prediccion_brix: allPredictions[(index + 1).toString()]?.brix_next_7d,
-        prediccion_rendimiento: allPredictions[(index + 1).toString()]?.yield_final,
-        recomendacion: allPredictions[(index + 1).toString()]?.harvest_recommendation,
-        confianza_brix: allPredictions[(index + 1).toString()]?.confidence_brix,
-        confianza_rendimiento: allPredictions[(index + 1).toString()]?.confidence_yield
-      }));
-    }
-  }
-);
-
 
 // Función de chat simple y no transmitida por streaming
 export async function chatWithFermentia(history: z.infer<typeof MessageSchema>[], message: string): Promise<FermentiaChatOutput> {
@@ -451,6 +383,8 @@ Sé amable, conocedor y servicial. Si no tienes información específica, utiliz
 # === Nombre : actions.ts
 # === Ruta   : src\app\actions.ts
 # ==============================================
+
+// src/app/actions.ts
 
 "use server";
 
@@ -668,6 +602,8 @@ export default function RootLayout({
 # === Ruta   : src\app\page.tsx
 # ==============================================
 
+// src/app/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -845,8 +781,8 @@ const ChatPanel: React.FC = () => {
                   <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
                     <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
                     <h3 className="font-semibold text-lg text-foreground mb-2">¡Bienvenido a Fermentia!</h3>
-                    <p className="text-sm">¡Pregúntame sobre tus viñedos y predicciones de cosecha!</p>
-                    <p className="text-xs mt-2">ej: "¿Cuáles son las predicciones de °Brix?" o "¿Cuándo cosechar Finca Roble Alto?"</p>
+                    <p className="text-sm">¡Pregúntame sobre sensores IoT, predicciones y alertas de tus viñedos!</p>
+                    <p className="text-xs mt-2">ej: "¿Hay alertas críticas?" • "Sensores de Finca Roble Alto" • "¿Qué parcelas tienen pH alto?"</p>
                   </div>
                 )}
                 {messages.map((message) => (
@@ -1188,6 +1124,8 @@ export default function VineyardsLayout({
 # === Ruta   : src\app\vineyards\page.tsx
 # ==============================================
 
+// src/app/vineyards/page.tsx
+
 "use client";
 
 import Link from "next/link"
@@ -1486,21 +1424,25 @@ export default function NewVineyardPage() {
 # === Ruta   : src\app\vineyards\[id]\layout.tsx
 # ==============================================
 
+// src/app/vineyards/[id]/layout.tsx
+
 export default function VineyardDetailLayout({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) {
-    return (
-      <div className="flex min-h-screen w-full flex-col">
-        {children}
-      </div>
-    );
-  }
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen w-full flex-col">
+      {children}
+    </div>
+  );
+}
 
 # === Nombre : page.tsx
 # === Ruta   : src\app\vineyards\[id]\page.tsx
 # ==============================================
+
+// src/app/vineyards/[id]/page.tsx
 
 "use client";
 
@@ -1519,6 +1461,8 @@ import {
   Droplets,
   Thermometer,
   Leaf,
+  Zap,
+  Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1535,19 +1479,65 @@ import { Progress } from "@/components/ui/progress";
 import type { Vineyard, Plot } from "@/types";
 import { getVineyardById, getPlotsByVineyardId } from "@/lib/data";
 
-const PlotStatusBadge: React.FC<{ recommendation: Plot['prediction']['harvest_recommendation'] }> = ({ recommendation }) => {
-  const variants = {
-    optimal: { variant: "default" as const, text: "Óptima", color: "text-green-600" },
-    harvest_soon: { variant: "secondary" as const, text: "Pronto", color: "text-yellow-600" },
-    wait: { variant: "outline" as const, text: "Esperar", color: "text-blue-600" }
+// Componente para mostrar tendencias con flechitas
+const TrendIndicator: React.FC<{ trend: string; value: string }> = ({ trend, value }) => {
+  const getTrendConfig = (trend: string) => {
+    switch (trend) {
+      case 'up_good':
+        return { icon: '↗️', color: 'text-green-600', bg: 'bg-green-50' };
+      case 'up_bad':
+        return { icon: '↗️', color: 'text-red-600', bg: 'bg-red-50' };
+      case 'down_good':
+        return { icon: '↘️', color: 'text-green-600', bg: 'bg-green-50' };
+      case 'down_bad':
+        return { icon: '↘️', color: 'text-red-600', bg: 'bg-red-50' };
+      case 'stable_good':
+        return { icon: '➡️', color: 'text-green-600', bg: 'bg-green-50' };
+      case 'stable_bad':
+        return { icon: '➡️', color: 'text-yellow-600', bg: 'bg-yellow-50' };
+      default:
+        return { icon: '➡️', color: 'text-gray-600', bg: 'bg-gray-50' };
+    }
   };
-  
-  const config = variants[recommendation] || variants.wait;
-  
+
+  const config = getTrendConfig(trend);
+
   return (
-    <Badge variant={config.variant} className={`${config.color} text-xs`}>
-      {config.text}
-    </Badge>
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${config.bg}`}>
+      <span className="text-sm">{config.icon}</span>
+      <span className={`text-xs font-medium ${config.color}`}>{value}</span>
+    </div>
+  );
+};
+
+// Componente para mostrar alertas
+const AlertBadge: React.FC<{ alert: Plot['alerts'] }> = ({ alert }) => {
+  const getAlertConfig = (priority: string) => {
+    switch (priority) {
+      case 'critical':
+        return { variant: "destructive" as const, icon: '🚨', text: alert.action_required };
+      case 'high':
+        return { variant: "destructive" as const, icon: '⚠️', text: alert.action_required };
+      case 'medium':
+        return { variant: "secondary" as const, icon: '⚡', text: alert.action_required };
+      case 'low':
+        return { variant: "outline" as const, icon: '📋', text: alert.action_required };
+      default:
+        return { variant: "outline" as const, icon: '✅', text: 'Todo bien' };
+    }
+  };
+
+  const config = getAlertConfig(alert.priority);
+
+  return (
+    <div className="space-y-1">
+      <Badge variant={config.variant} className="text-xs">
+        {config.icon} {config.text}
+      </Badge>
+      <div className="text-xs text-muted-foreground">
+        {alert.time_frame}
+      </div>
+    </div>
   );
 };
 
@@ -1604,9 +1594,10 @@ export default function VineyardDetailPage() {
 
   // Calcular estadísticas del viñedo
   const avgBrix = plots.reduce((acc, plot) => acc + plot.prediction.brix_next_7d, 0) / plots.length;
-  const avgYield = plots.reduce((acc, plot) => acc + plot.prediction.yield_final, 0) / plots.length;
+  const avgMoisture = plots.reduce((acc, plot) => acc + plot.prediction.soil_moisture_next_7d, 0) / plots.length;
   const avgQuality = plots.reduce((acc, plot) => acc + plot.prediction.quality_score, 0) / plots.length;
   const readyToHarvest = plots.filter(plot => plot.prediction.harvest_recommendation === 'optimal').length;
+  const criticalAlerts = plots.filter(plot => plot.alerts.priority === 'critical').length;
   const totalArea = plots.reduce((acc, plot) => acc + plot.area_ha, 0);
 
   return (
@@ -1667,41 +1658,41 @@ export default function VineyardDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Métricas resumen */}
+          {/* Métricas predictivas */}
           <div className="md:col-span-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard
-              title="°Brix Promedio"
+              title="°Brix Predicho"
               value={`${avgBrix.toFixed(1)}°`}
               icon={<Grape className="h-4 w-4 text-muted-foreground" />}
-              description="Predicción a 7 días"
+              description="Promedio a 7 días"
             />
             <MetricCard
-              title="Rendimiento"
-              value={`${Math.round(avgYield).toLocaleString()}`}
-              icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
-              description="kg/ha promedio"
+              title="Humedad Estimada"
+              value={`${avgMoisture.toFixed(0)}%`}
+              icon={<Droplets className="h-4 w-4 text-muted-foreground" />}
+              description="Suelo a 7 días"
             />
             <MetricCard
-              title="Calidad"
-              value={`${Math.round(avgQuality)}/100`}
-              icon={<Leaf className="h-4 w-4 text-muted-foreground" />}
-              description="Score de calidad"
-            />
-            <MetricCard
-              title="Listas"
+              title="Listas p/Cosecha"
               value={`${readyToHarvest}/${plots.length}`}
               icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-              description="Parcelas para cosecha"
+              description="Parcelas óptimas"
+            />
+            <MetricCard
+              title="Alertas Críticas"
+              value={criticalAlerts}
+              icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
+              description="Requieren acción"
             />
           </div>
         </div>
 
-        {/* Tabla de parcelas */}
+        {/* Tabla detallada de monitoreo predictivo por parcelas */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
-              Detalle por Parcelas
+              Monitoreo Predictivo por Parcelas
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1710,15 +1701,15 @@ export default function VineyardDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">#</TableHead>
-                    <TableHead>Área</TableHead>
-                    <TableHead>Suelo</TableHead>
-                    <TableHead>Edad</TableHead>
+                    <TableHead>Humedad</TableHead>
+                    <TableHead>Temp</TableHead>
+                    <TableHead>pH</TableHead>
+                    <TableHead>EC</TableHead>
+                    <TableHead>Luz</TableHead>
                     <TableHead>°Brix</TableHead>
-                    <TableHead>Rendimiento</TableHead>
-                    <TableHead>Calidad</TableHead>
+                    <TableHead>Tendencias</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Cosecha</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>Alertas</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1728,70 +1719,78 @@ export default function VineyardDetailPage() {
                         {plot.plotNumber}
                       </TableCell>
                       <TableCell>
-                        {plot.area_ha.toFixed(1)} ha
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.soil_moisture.toFixed(0)}%</div>
+                          <div className="text-xs text-muted-foreground">Actual</div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="text-sm">{plot.soilType}</div>
+                          <div className="font-semibold">{plot.currentSensorData.temperature.toFixed(0)}°C</div>
+                          <div className="text-xs text-muted-foreground">Actual</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.soil_ph.toFixed(1)}</div>
+                          <div className="text-xs text-muted-foreground">pH</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.electrical_conductivity.toFixed(1)}</div>
+                          <div className="text-xs text-muted-foreground">mS/cm</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.light_intensity.toFixed(0)}</div>
+                          <div className="text-xs text-muted-foreground">lux</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.brix_current.toFixed(1)}° / {plot.prediction.brix_next_7d.toFixed(1)}°</div>
                           <div className="text-xs text-muted-foreground">
-                            pH: {plot.iotData.soil_ph.toFixed(1)}
+                            Actual / Predicho 7d
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="text-sm">{plot.vineAge} años</div>
+                          <TrendIndicator trend={plot.trends.brix_trend} value="Brix" />
+                          <TrendIndicator trend={plot.trends.moisture_trend} value="Agua" />
+                          {(plot.trends.ph_trend !== 'stable_good' || plot.trends.temp_trend !== 'stable_good') && (
+                            <div className="space-y-1">
+                              {plot.trends.ph_trend !== 'stable_good' && (
+                                <TrendIndicator trend={plot.trends.ph_trend} value="pH" />
+                              )}
+                              {plot.trends.temp_trend !== 'stable_good' && (
+                                <TrendIndicator trend={plot.trends.temp_trend} value="Temp" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <Badge 
+                            variant={
+                              plot.prediction.harvest_recommendation === 'optimal' ? 'default' :
+                              plot.prediction.harvest_recommendation === 'harvest_soon' ? 'secondary' : 'outline'
+                            }
+                            className="text-xs"
+                          >
+                            {plot.prediction.harvest_recommendation === 'optimal' ? 'Óptimo' :
+                             plot.prediction.harvest_recommendation === 'harvest_soon' ? 'Pronto' : 'Esperar'}
+                          </Badge>
                           <div className="text-xs text-muted-foreground">
-                            {plot.exposure}
+                            Calidad: {plot.prediction.quality_score}/100
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {plot.prediction.brix_next_7d}°
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {(plot.prediction.confidence_brix * 100).toFixed(0)}% confianza
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {plot.prediction.yield_final.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            kg/ha
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {plot.prediction.quality_score}/100
-                          </div>
-                          <Progress 
-                            value={plot.prediction.quality_score} 
-                            className="h-1 w-12"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <PlotStatusBadge recommendation={plot.prediction.harvest_recommendation} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {new Date(plot.prediction.expected_harvest_date).toLocaleDateString('es-ES', {
-                            day: '2-digit',
-                            month: 'short'
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          Ver Detalles
-                        </Button>
+                        <AlertBadge alert={plot.alerts} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1801,67 +1800,134 @@ export default function VineyardDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Resumen de condiciones ambientales */}
+        {/* Resumen de condiciones ambientales por parcela */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Thermometer className="h-5 w-5" />
-              Condiciones Ambientales Promedio
+              Condiciones Ambientales por Parcela
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Thermometer className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">Temperatura</span>
+            <div className="space-y-4">
+              {plots.map((plot) => (
+                <div key={plot.id} className="border rounded-lg p-4 bg-muted/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold">Parcela #{plot.plotNumber}</h4>
+                    <div className="text-sm text-muted-foreground">
+                      {plot.area_ha.toFixed(1)} ha • {plot.soilType} • {plot.exposure}
+                    </div>
+                  </div>
+                  
+                  <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Thermometer className="h-4 w-4 text-orange-500" />
+                        <span className="text-sm font-medium">Temperatura</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.temperature.toFixed(1)}°C
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {plot.trends.temp_trend !== 'stable_good' && (
+                          <TrendIndicator trend={plot.trends.temp_trend} value="Temp" />
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Droplets className="h-4 w-4 text-blue-500" />
+                        <span className="text-sm font-medium">Humedad Suelo</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.soil_moisture.toFixed(0)}%
+                      </div>
+                      <div className="text-xs">
+                        <TrendIndicator trend={plot.trends.moisture_trend} value="↗7d: " />
+                        <span className="text-muted-foreground ml-1">
+                          {plot.prediction.soil_moisture_next_7d.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Grape className="h-4 w-4 text-purple-500" />
+                        <span className="text-sm font-medium">°Brix</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.brix_current.toFixed(1)}°
+                      </div>
+                      <div className="text-xs">
+                        <TrendIndicator trend={plot.trends.brix_trend} value="↗7d: " />
+                        <span className="text-muted-foreground ml-1">
+                          {plot.prediction.brix_next_7d.toFixed(1)}°
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Leaf className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-medium">pH Suelo</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.soil_ph.toFixed(1)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {plot.trends.ph_trend !== 'stable_good' && (
+                          <TrendIndicator trend={plot.trends.ph_trend} value="pH" />
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-yellow-500" />
+                        <span className="text-sm font-medium">EC</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.electrical_conductivity.toFixed(1)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        mS/cm
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Sun className="h-4 w-4 text-yellow-600" />
+                        <span className="text-sm font-medium">Luz</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.light_intensity.toFixed(0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        lux
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Información adicional de la parcela */}
+                  <div className="mt-4 pt-3 border-t border-muted">
+                    <div className="grid gap-2 sm:grid-cols-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Plantación:</span>
+                        <span className="ml-1 font-medium">{plot.plantingYear} ({plot.vineAge} años)</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Pendiente:</span>
+                        <span className="ml-1 font-medium">{plot.slope}°</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">M. Orgánica:</span>
+                        <span className="ml-1 font-medium">{plot.iotData.organic_matter.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.temp_mean_7d.toFixed(1)}°C
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Media 7 días
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Droplets className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium">Humedad Rel.</span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.hr_max_3d.toFixed(0)}%
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Máxima 3 días
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Droplets className="h-4 w-4 text-green-500" />
-                  <span className="text-sm font-medium">Humedad Suelo</span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.soil_moist_mean_24h.toFixed(0)}%
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Media 24h
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Leaf className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-medium">NDVI</span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.ndvi_anom.toFixed(3)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Anomalía NDVI
-                </div>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -5265,7 +5331,169 @@ export { useToast, toast }
 # === Ruta   : src\lib\data.ts
 # ==============================================
 
+// src/lib/data.ts
+
 import type { Vineyard, HarvestPrediction, Plot } from "@/types";
+
+/**
+ * Nuevo algoritmo para predicción de humedad del suelo a 7 días
+ * Basado en factores vitícolas reales
+ */
+function soilMoisturePredictor(currentSensorData: any, iotData: any): number {
+  const { soil_moisture, temperature, electrical_conductivity } = currentSensorData;
+  const { water_stress_index, organic_matter } = iotData;
+  
+  // Base: humedad actual
+  let moisture_7d = soil_moisture;
+  
+  // Factor estacional (agosto = tendencia a la baja para estrés hídrico controlado)
+  const seasonalFactor = -0.5; // Tendencia ligeramente a la baja
+  
+  // Factor de temperatura (más calor = más evaporación)
+  const tempFactor = (temperature - 22) * -0.3; // Por cada grado sobre 22°C, baja 0.3%
+  
+  // Factor de conductividad (alta EC puede afectar absorción)
+  const ecFactor = electrical_conductivity > 1.5 ? -0.2 : 0;
+  
+  // Factor de materia orgánica (retiene más agua)
+  const organicFactor = organic_matter * 0.1;
+  
+  // Factor de estrés hídrico actual
+  const stressFactor = water_stress_index * -1.5;
+  
+  // Aplicar todos los factores
+  moisture_7d += seasonalFactor + tempFactor + ecFactor + organicFactor + stressFactor;
+  
+  // Agregar variabilidad natural
+  moisture_7d += (Math.random() - 0.5) * 3;
+  
+  // Mantener en rango realista (3-45%)
+  return Math.max(3, Math.min(45, moisture_7d));
+}
+
+// Función para calcular tendencias vitícolas realistas
+function calculateTrends(currentSensorData: any, iotData: any, prediction: any) {
+  const { soil_moisture, temperature, soil_ph, brix_current } = currentSensorData;
+  const { brix_next_7d, soil_moisture_next_7d } = prediction;
+  
+  // Calcular tendencias basadas en viticultura real
+  const brix_rate = (brix_next_7d - brix_current) / 7; // °Brix por día real
+  const moisture_rate = (soil_moisture_next_7d - soil_moisture) / 7; // % humedad por día
+  const ph_change = Math.abs(soil_ph - 6.8); // Desviación del pH óptimo 6.8
+  const temp_status = temperature;
+
+  return {
+    // Tendencia °Brix basada en velocidad de maduración científicamente válida
+    brix_trend: 
+      brix_rate > 0.8 ? 'up_bad' :      // Muy rápido (sobre-maduración)
+      brix_rate >= 0.3 ? 'up_good' :    // Velocidad óptima (0.3-0.8° por día)
+      brix_rate > 0 ? 'stable_good' :   // Lento pero progresando
+      'down_bad',                       // Perdiendo azúcar (problema)
+
+    // Tendencia humedad basada en estrés hídrico controlado
+    moisture_trend:
+      moisture_rate < -3 ? 'down_bad' :     // Perdiendo agua muy rápido (estrés excesivo)
+      moisture_rate < -1 ? 'down_good' :    // Estrés hídrico controlado (beneficioso)
+      moisture_rate <= 1 ? 'stable_good' :  // Estable (bueno)
+      'up_bad',                             // Aumentando humedad (malo para calidad)
+
+    // Tendencia pH basada en rangos vitícolas óptimos
+    ph_trend:
+      ph_change > 0.5 ? (soil_ph > 6.8 ? 'up_bad' : 'down_bad') : 'stable_good',
+
+    // Tendencia temperatura basada en rangos óptimos de maduración
+    temp_trend:
+      temp_status > 28 ? 'up_bad' :      // Muy caliente (estrés térmico)
+      temp_status > 25 ? 'up_good' :     // Calor moderado (bueno para maduración)
+      temp_status >= 20 ? 'stable_good' : // Temperatura ideal
+      'down_good'                        // Fresco (ralentiza maduración, puede ser bueno)
+  };
+}
+
+// Función para generar alertas dinámicas basadas en urgencia vitícola real
+function generateViticultureAlerts(
+  currentSensorData: any, 
+  prediction: any, 
+  trends: any,
+  vineAge: number
+): { priority: string; message: string; action_required: string; time_frame: string } {
+  const { soil_moisture, temperature, soil_ph, electrical_conductivity } = currentSensorData;
+  const { brix_next_7d } = prediction;
+  
+  // Mes actual (simulado como agosto - época de pre-cosecha)
+  const currentMonth = 8; // Agosto
+  
+  // Alertas críticas basadas en ciencia vitícola
+  if (brix_next_7d > 24 && currentMonth >= 8) {
+    return {
+      priority: 'critical',
+      message: 'Sobre-maduración inminente',
+      action_required: 'COSECHAR INMEDIATAMENTE',
+      time_frame: '24h'
+    };
+  }
+  
+  if (soil_moisture < 8) {
+    return {
+      priority: 'critical', 
+      message: 'Estrés hídrico severo',
+      action_required: 'RIEGO URGENTE',
+      time_frame: '12h'
+    };
+  }
+  
+  if (temperature > 30) {
+    return {
+      priority: 'high',
+      message: 'Estrés térmico peligroso', 
+      action_required: 'Proteger del calor',
+      time_frame: '24h'
+    };
+  }
+  
+  if (brix_next_7d >= 23 && currentMonth >= 8) {
+    return {
+      priority: 'high',
+      message: 'Ventana de cosecha próxima',
+      action_required: 'Preparar cosecha',
+      time_frame: '3-5 días'
+    };
+  }
+  
+  if (soil_ph < 6.0 || soil_ph > 7.5) {
+    return {
+      priority: 'medium',
+      message: 'pH fuera de rango óptimo',
+      action_required: 'Corregir pH del suelo',
+      time_frame: '48h'
+    };
+  }
+  
+  if (electrical_conductivity > 2.0) {
+    return {
+      priority: 'medium',
+      message: 'Salinidad elevada',
+      action_required: 'Reducir salinidad',
+      time_frame: '1 semana'
+    };
+  }
+  
+  if (soil_moisture > 35) {
+    return {
+      priority: 'medium',
+      message: 'Exceso de humedad',
+      action_required: 'Reducir riego',
+      time_frame: '48h'
+    };
+  }
+  
+  return {
+    priority: 'low',
+    message: 'Condiciones normales',
+    action_required: 'Monitoreo rutinario',
+    time_frame: 'Semanal'
+  };
+}
 
 // Función para generar datos de una parcela individual
 function generatePlotData(
@@ -5297,7 +5525,7 @@ function generatePlotData(
   const plantingYear = 2024 - (5 + Math.floor(Math.random() * 20));
   const vineAge = 2024 - plantingYear;
   
-  // IoT data con variaciones por parcela
+  // IoT data con variaciones por parcela para algoritmos ML
   const plotIoTData = {
     temp_mean_7d: baseIoTData.temp_mean_7d * variation(),
     hr_max_3d: baseIoTData.hr_max_3d * smallVariation(),
@@ -5308,31 +5536,72 @@ function generatePlotData(
     cos_day,
     variedad_onehot: baseIoTData.variedad_onehot,
     // Datos específicos de parcela
-    soil_ph: 6.0 + Math.random() * 2.0, // pH 6.0 - 8.0
     organic_matter: 1.5 + Math.random() * 3.5, // 1.5% - 5.0%
     water_stress_index: Math.random() * 0.7, // 0 - 0.7
   };
   
   // Generar predicciones para esta parcela específica
-  const brix_next_7d = brixRandomForest(plotIoTData);
+  const brix_next_7d = brixRandomForest({
+    ...plotIoTData,
+    soil_ph: Math.max(5.5, Math.min(8.5, 6.0 + Math.random() * 2.0)),
+    organic_matter: plotIoTData.organic_matter,
+    water_stress_index: plotIoTData.water_stress_index
+  });
+  
+  // Generar °Brix actual realista (ligeramente menor que la predicción de 7 días)
+  const brix_current = Math.max(15, brix_next_7d - (0.3 + Math.random() * 2)); // 0.3-2.3° menos que predicción
+  
+  // Datos actuales de sensores IoT (rangos científicamente válidos)
+  const currentSensorData = {
+    soil_moisture: Math.max(5, Math.min(40, 15 + Math.random() * 20)), // 5-40% (rango real viticultura)
+    temperature: Math.max(15, Math.min(35, 20 + Math.random() * 10)), // 15-35°C (rango real)
+    soil_ph: Math.max(5.5, Math.min(8.5, 6.0 + Math.random() * 2.0)), // 5.5-8.5 (rango real)
+    electrical_conductivity: Math.max(0.5, Math.min(3.0, 0.8 + Math.random() * 1.5)), // 0.5-3.0 mS/cm
+    light_intensity: Math.max(3000, Math.min(7000, 4000 + Math.random() * 2000)), // 3000-7000 lux
+    air_humidity: Math.max(40, Math.min(90, 50 + Math.random() * 30)), // 40-90% HR
+    brix_current, // °Brix actual medido
+  };
+  
+  // Nueva predicción de humedad del suelo a 7 días usando algoritmo vitícola
+  const soil_moisture_next_7d = soilMoisturePredictor(currentSensorData, plotIoTData);
+  
   const yield_final = yieldXGBoost({
     ...plotIoTData,
     surface_ha: baseIoTData.surface_ha / totalPlots // Área promedio por parcela
   });
   
   // Fecha estimada de cosecha basada en °Brix
-  const daysToHarvest = Math.max(7, Math.round((24 - brix_next_7d) * 3));
+  const daysToHarvest = Math.max(3, Math.round((25 - brix_next_7d) * 4));
   const harvestDate = new Date();
   harvestDate.setDate(harvestDate.getDate() + daysToHarvest);
   
-  // Score de calidad basado en múltiples factores
+  // Score de calidad basado en múltiples factores vitícolas
   const qualityScore = Math.min(100, Math.max(60, 
-    (brix_next_7d * 3) + 
-    (yield_final / 100) + 
-    ((8 - Math.abs(plotIoTData.soil_ph - 7)) * 5) +
+    (brix_next_7d * 2.8) + 
+    (yield_final / 120) + 
+    ((8 - Math.abs(currentSensorData.soil_ph - 6.8)) * 8) +
     ((5 - plotIoTData.organic_matter) * 3) +
-    ((1 - plotIoTData.water_stress_index) * 10)
+    ((1 - plotIoTData.water_stress_index) * 12)
   ));
+
+  // Crear predicciones
+  const prediction = {
+    brix_next_7d,
+    soil_moisture_next_7d,
+    yield_final,
+    confidence_brix: 0.75 + Math.random() * 0.2,
+    confidence_moisture: 0.70 + Math.random() * 0.25,
+    confidence_yield: 0.70 + Math.random() * 0.25,
+    harvest_recommendation: (brix_next_7d >= 24 ? 'optimal' : brix_next_7d >= 22 ? 'harvest_soon' : 'wait') as 'optimal' | 'harvest_soon' | 'wait',
+    expected_harvest_date: harvestDate.toISOString().split('T')[0],
+    quality_score: Math.round(qualityScore)
+  };
+
+  // Calcular tendencias
+  const trends = calculateTrends(currentSensorData, plotIoTData, prediction);
+  
+  // Generar alertas
+  const alerts = generateViticultureAlerts(currentSensorData, prediction, trends, vineAge);
 
   return {
     id: `plot-${plotNumber}`,
@@ -5343,16 +5612,11 @@ function generatePlotData(
     exposure: exposures[Math.floor(Math.random() * exposures.length)],
     plantingYear,
     vineAge,
+    currentSensorData,
     iotData: plotIoTData,
-    prediction: {
-      brix_next_7d,
-      yield_final,
-      confidence_brix: 0.75 + Math.random() * 0.2,
-      confidence_yield: 0.70 + Math.random() * 0.25,
-      harvest_recommendation: brix_next_7d >= 24 ? 'optimal' : brix_next_7d >= 22 ? 'harvest_soon' : 'wait',
-      expected_harvest_date: harvestDate.toISOString().split('T')[0],
-      quality_score: Math.round(qualityScore)
-    }
+    prediction,
+    trends,
+    alerts
   };
 }
 
@@ -5424,93 +5688,6 @@ function generateVineyardWithPlots(
     imageHint
   };
 }
-
-export const initialVineyards: Vineyard[] = [
-  generateVineyardWithPlots(
-    "1", 
-    "Finca Roble Alto", 
-    "Valle de Napa, California", 
-    "Cabernet Sauvignon, Merlot", 
-    12, 
-    "/imgs/1.jpg", 
-    "vineyard aerial"
-  ),
-  generateVineyardWithPlots(
-    "2", 
-    "Viñedos Arroyo Sauce", 
-    "Borgoña, Francia", 
-    "Chardonnay, Pinot Noir", 
-    8, 
-    "/imgs/2.png", 
-    "grapes vine"
-  ),
-  generateVineyardWithPlots(
-    "3", 
-    "Hacienda del Valle del Sol", 
-    "Toscana, Italia", 
-    "Zinfandel, Syrah", 
-    15, 
-    "/imgs/3.jpeg", 
-    "vineyard sunset"
-  ),
-  generateVineyardWithPlots(
-    "4", 
-    "Vides de la Montaña Nublada", 
-    "Sonoma, California", 
-    "Sauvignon Blanc", 
-    10, 
-    "/imgs/4.png", 
-    "vineyard mountain"
-  ),
-];
-
-// Estado en memoria
-let vineyardsDB = [...initialVineyards];
-
-// Funciones existentes
-export function getVineyards() {
-  return vineyardsDB;
-}
-
-export function getVineyardById(id: string) {
-  return vineyardsDB.find(v => v.id === id);
-}
-
-export function addVineyard(vineyardData: Omit<Vineyard, 'id' | 'iotData' | 'plots'>) {
-  const newVineyard = generateVineyardWithPlots(
-    (vineyardsDB.length + 1).toString(),
-    vineyardData.name,
-    vineyardData.location,
-    vineyardData.grapeVarietals,
-    vineyardData.totalPlots,
-    vineyardData.imageUrl,
-    vineyardData.imageHint
-  );
-  vineyardsDB.push(newVineyard);
-  return newVineyard;
-}
-
-/**
- * Obtener datos específicos de una parcela
- */
-export function getPlotById(vineyardId: string, plotNumber: number): Plot | null {
-  const vineyard = getVineyardById(vineyardId);
-  if (!vineyard) return null;
-  
-  return vineyard.plots.find(plot => plot.plotNumber === plotNumber) || null;
-}
-
-/**
- * Obtener todas las parcelas de un viñedo
- */
-export function getPlotsByVineyardId(vineyardId: string): Plot[] {
-  const vineyard = getVineyardById(vineyardId);
-  if (!vineyard) return [];
-  
-  return vineyard.plots;
-}
-
-// ============ ALGORITMOS DE PREDICCIÓN DE COSECHA ============
 
 /**
  * Simulación del modelo Random Forest para predicción de °Brix
@@ -5649,6 +5826,91 @@ function yieldXGBoost(iotData: any): number {
   return Math.max(4000, Math.min(15000, Math.round(yieldPrediction)));
 }
 
+export const initialVineyards: Vineyard[] = [
+  generateVineyardWithPlots(
+    "1", 
+    "Finca Roble Alto", 
+    "Valle de Napa, California", 
+    "Cabernet Sauvignon, Merlot", 
+    12, 
+    "/imgs/1.jpg", 
+    "vineyard aerial"
+  ),
+  generateVineyardWithPlots(
+    "2", 
+    "Viñedos Arroyo Sauce", 
+    "Borgoña, Francia", 
+    "Chardonnay, Pinot Noir", 
+    8, 
+    "/imgs/2.png", 
+    "grapes vine"
+  ),
+  generateVineyardWithPlots(
+    "3", 
+    "Hacienda del Valle del Sol", 
+    "Toscana, Italia", 
+    "Zinfandel, Syrah", 
+    15, 
+    "/imgs/3.jpeg", 
+    "vineyard sunset"
+  ),
+  generateVineyardWithPlots(
+    "4", 
+    "Vides de la Montaña Nublada", 
+    "Sonoma, California", 
+    "Sauvignon Blanc", 
+    10, 
+    "/imgs/4.png", 
+    "vineyard mountain"
+  ),
+];
+
+// Mantenemos un estado en memoria para simular una base de datos.
+let vineyardsDB = [...initialVineyards];
+
+export function getVineyards() {
+  // En una aplicación real, esto consultaría una base de datos.
+  return vineyardsDB;
+}
+
+export function getVineyardById(id: string) {
+    return vineyardsDB.find(v => v.id === id);
+}
+
+export function addVineyard(vineyardData: Omit<Vineyard, 'id' | 'iotData' | 'plots'>) {
+  const newVineyard = generateVineyardWithPlots(
+    (vineyardsDB.length + 1).toString(),
+    vineyardData.name,
+    vineyardData.location,
+    vineyardData.grapeVarietals,
+    vineyardData.totalPlots,
+    vineyardData.imageUrl,
+    vineyardData.imageHint
+  );
+  vineyardsDB.push(newVineyard);
+  return newVineyard;
+}
+
+/**
+ * Obtener datos específicos de una parcela
+ */
+export function getPlotById(vineyardId: string, plotNumber: number): Plot | null {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return null;
+  
+  return vineyard.plots.find(plot => plot.plotNumber === plotNumber) || null;
+}
+
+/**
+ * Obtener todas las parcelas de un viñedo
+ */
+export function getPlotsByVineyardId(vineyardId: string): Plot[] {
+  const vineyard = getVineyardById(vineyardId);
+  if (!vineyard) return [];
+  
+  return vineyard.plots;
+}
+
 /**
  * Función principal para obtener predicciones de cosecha
  */
@@ -5739,6 +6001,66 @@ export function cn(...inputs: ClassValue[]) {
 
 // src/types/index.ts
 
+export type Plot = {
+  id: string;
+  plotNumber: number;
+  area_ha: number; // Área de la parcela en hectáreas
+  soilType: string; // Tipo de suelo
+  slope: number; // Pendiente en grados
+  exposure: string; // Exposición al sol (Norte, Sur, etc.)
+  plantingYear: number; // Año de plantación
+  vineAge: number; // Edad de las vides en años
+  // Datos actuales de sensores IoT (simulados pero realistas)
+  currentSensorData: {
+    soil_moisture: number; // Humedad del suelo actual (%)
+    temperature: number; // Temperatura actual (°C)
+    soil_ph: number; // pH del suelo
+    electrical_conductivity: number; // EC en mS/cm
+    light_intensity: number; // Luz en lux
+    air_humidity: number; // Humedad relativa del aire (%)
+    brix_current: number; // °Brix actual (medición real)
+  };
+  // Métricas específicas de la parcela para ML
+  iotData: {
+    temp_mean_7d: number;
+    hr_max_3d: number;
+    soil_moist_mean_24h: number;
+    ndvi_anom: number;
+    evi_anom: number;
+    sin_day: number;
+    cos_day: number;
+    variedad_onehot: number[];
+    // Métricas adicionales específicas de parcela
+    organic_matter: number; // % materia orgánica
+    water_stress_index: number; // Índice de estrés hídrico
+  };
+  prediction: {
+    brix_next_7d: number;
+    soil_moisture_next_7d: number; // Nueva predicción de humedad del suelo
+    yield_final: number;
+    confidence_brix: number;
+    confidence_moisture: number; // Nueva confianza para humedad
+    confidence_yield: number;
+    harvest_recommendation: 'optimal' | 'wait' | 'harvest_soon';
+    expected_harvest_date: string; // Fecha estimada de cosecha
+    quality_score: number; // Score de calidad esperada (1-100)
+  };
+  // Nuevas tendencias específicas
+  trends: {
+    brix_trend: 'up_good' | 'up_bad' | 'down_bad' | 'stable_good' | 'stable_bad';
+    moisture_trend: 'down_good' | 'down_bad' | 'up_bad' | 'stable_good' | 'stable_bad';
+    ph_trend: 'up_bad' | 'down_bad' | 'stable_good';
+    temp_trend: 'up_bad' | 'up_good' | 'stable_good' | 'down_good';
+  };
+  // Alertas dinámicas basadas en urgencia vitícola
+  alerts: {
+    priority: 'critical' | 'high' | 'medium' | 'low' | 'none';
+    message: string;
+    action_required: string;
+    time_frame: string; // "24h", "48h", "1 semana", etc.
+  };
+};
+
 export type Vineyard = {
   id: string;
   name: string;
@@ -5767,41 +6089,6 @@ export type Message = {
   id: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
-};
-
-export type Plot = {
-  id: string;
-  plotNumber: number;
-  area_ha: number; // Área de la parcela en hectáreas
-  soilType: string; // Tipo de suelo
-  slope: number; // Pendiente en grados
-  exposure: string; // Exposición al sol (Norte, Sur, etc.)
-  plantingYear: number; // Año de plantación
-  vineAge: number; // Edad de las vides en años
-  // Métricas específicas de la parcela
-  iotData: {
-    temp_mean_7d: number;
-    hr_max_3d: number;
-    soil_moist_mean_24h: number;
-    ndvi_anom: number;
-    evi_anom: number;
-    sin_day: number;
-    cos_day: number;
-    variedad_onehot: number[];
-    // Métricas adicionales específicas de parcela
-    soil_ph: number;
-    organic_matter: number; // % materia orgánica
-    water_stress_index: number; // Índice de estrés hídrico
-  };
-  prediction: {
-    brix_next_7d: number;
-    yield_final: number;
-    confidence_brix: number;
-    confidence_yield: number;
-    harvest_recommendation: 'optimal' | 'wait' | 'harvest_soon';
-    expected_harvest_date: string; // Fecha estimada de cosecha
-    quality_score: number; // Score de calidad esperada (1-100)
-  };
 };
 
 export type HarvestPrediction = {

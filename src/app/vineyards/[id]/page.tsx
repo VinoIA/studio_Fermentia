@@ -1,3 +1,5 @@
+// src/app/vineyards/[id]/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -15,6 +17,8 @@ import {
   Droplets,
   Thermometer,
   Leaf,
+  Zap,
+  Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,19 +35,65 @@ import { Progress } from "@/components/ui/progress";
 import type { Vineyard, Plot } from "@/types";
 import { getVineyardById, getPlotsByVineyardId } from "@/lib/data";
 
-const PlotStatusBadge: React.FC<{ recommendation: Plot['prediction']['harvest_recommendation'] }> = ({ recommendation }) => {
-  const variants = {
-    optimal: { variant: "default" as const, text: "Óptima", color: "text-green-600" },
-    harvest_soon: { variant: "secondary" as const, text: "Pronto", color: "text-yellow-600" },
-    wait: { variant: "outline" as const, text: "Esperar", color: "text-blue-600" }
+// Componente para mostrar tendencias con flechitas
+const TrendIndicator: React.FC<{ trend: string; value: string }> = ({ trend, value }) => {
+  const getTrendConfig = (trend: string) => {
+    switch (trend) {
+      case 'up_good':
+        return { icon: '↗️', color: 'text-green-600', bg: 'bg-green-50' };
+      case 'up_bad':
+        return { icon: '↗️', color: 'text-red-600', bg: 'bg-red-50' };
+      case 'down_good':
+        return { icon: '↘️', color: 'text-green-600', bg: 'bg-green-50' };
+      case 'down_bad':
+        return { icon: '↘️', color: 'text-red-600', bg: 'bg-red-50' };
+      case 'stable_good':
+        return { icon: '➡️', color: 'text-green-600', bg: 'bg-green-50' };
+      case 'stable_bad':
+        return { icon: '➡️', color: 'text-yellow-600', bg: 'bg-yellow-50' };
+      default:
+        return { icon: '➡️', color: 'text-gray-600', bg: 'bg-gray-50' };
+    }
   };
-  
-  const config = variants[recommendation] || variants.wait;
-  
+
+  const config = getTrendConfig(trend);
+
   return (
-    <Badge variant={config.variant} className={`${config.color} text-xs`}>
-      {config.text}
-    </Badge>
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${config.bg}`}>
+      <span className="text-sm">{config.icon}</span>
+      <span className={`text-xs font-medium ${config.color}`}>{value}</span>
+    </div>
+  );
+};
+
+// Componente para mostrar alertas
+const AlertBadge: React.FC<{ alert: Plot['alerts'] }> = ({ alert }) => {
+  const getAlertConfig = (priority: string) => {
+    switch (priority) {
+      case 'critical':
+        return { variant: "destructive" as const, icon: '🚨', text: alert.action_required };
+      case 'high':
+        return { variant: "destructive" as const, icon: '⚠️', text: alert.action_required };
+      case 'medium':
+        return { variant: "secondary" as const, icon: '⚡', text: alert.action_required };
+      case 'low':
+        return { variant: "outline" as const, icon: '📋', text: alert.action_required };
+      default:
+        return { variant: "outline" as const, icon: '✅', text: 'Todo bien' };
+    }
+  };
+
+  const config = getAlertConfig(alert.priority);
+
+  return (
+    <div className="space-y-1">
+      <Badge variant={config.variant} className="text-xs">
+        {config.icon} {config.text}
+      </Badge>
+      <div className="text-xs text-muted-foreground">
+        {alert.time_frame}
+      </div>
+    </div>
   );
 };
 
@@ -100,9 +150,10 @@ export default function VineyardDetailPage() {
 
   // Calcular estadísticas del viñedo
   const avgBrix = plots.reduce((acc, plot) => acc + plot.prediction.brix_next_7d, 0) / plots.length;
-  const avgYield = plots.reduce((acc, plot) => acc + plot.prediction.yield_final, 0) / plots.length;
+  const avgMoisture = plots.reduce((acc, plot) => acc + plot.prediction.soil_moisture_next_7d, 0) / plots.length;
   const avgQuality = plots.reduce((acc, plot) => acc + plot.prediction.quality_score, 0) / plots.length;
   const readyToHarvest = plots.filter(plot => plot.prediction.harvest_recommendation === 'optimal').length;
+  const criticalAlerts = plots.filter(plot => plot.alerts.priority === 'critical').length;
   const totalArea = plots.reduce((acc, plot) => acc + plot.area_ha, 0);
 
   return (
@@ -163,41 +214,41 @@ export default function VineyardDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Métricas resumen */}
+          {/* Métricas predictivas */}
           <div className="md:col-span-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard
-              title="°Brix Promedio"
+              title="°Brix Predicho"
               value={`${avgBrix.toFixed(1)}°`}
               icon={<Grape className="h-4 w-4 text-muted-foreground" />}
-              description="Predicción a 7 días"
+              description="Promedio a 7 días"
             />
             <MetricCard
-              title="Rendimiento"
-              value={`${Math.round(avgYield).toLocaleString()}`}
-              icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
-              description="kg/ha promedio"
+              title="Humedad Estimada"
+              value={`${avgMoisture.toFixed(0)}%`}
+              icon={<Droplets className="h-4 w-4 text-muted-foreground" />}
+              description="Suelo a 7 días"
             />
             <MetricCard
-              title="Calidad"
-              value={`${Math.round(avgQuality)}/100`}
-              icon={<Leaf className="h-4 w-4 text-muted-foreground" />}
-              description="Score de calidad"
-            />
-            <MetricCard
-              title="Listas"
+              title="Listas p/Cosecha"
               value={`${readyToHarvest}/${plots.length}`}
               icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-              description="Parcelas para cosecha"
+              description="Parcelas óptimas"
+            />
+            <MetricCard
+              title="Alertas Críticas"
+              value={criticalAlerts}
+              icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
+              description="Requieren acción"
             />
           </div>
         </div>
 
-        {/* Tabla de parcelas */}
+        {/* Tabla detallada de monitoreo predictivo por parcelas */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
-              Detalle por Parcelas
+              Monitoreo Predictivo por Parcelas
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -206,15 +257,15 @@ export default function VineyardDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">#</TableHead>
-                    <TableHead>Área</TableHead>
-                    <TableHead>Suelo</TableHead>
-                    <TableHead>Edad</TableHead>
+                    <TableHead>Humedad</TableHead>
+                    <TableHead>Temp</TableHead>
+                    <TableHead>pH</TableHead>
+                    <TableHead>EC</TableHead>
+                    <TableHead>Luz</TableHead>
                     <TableHead>°Brix</TableHead>
-                    <TableHead>Rendimiento</TableHead>
-                    <TableHead>Calidad</TableHead>
+                    <TableHead>Tendencias</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Cosecha</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead>Alertas</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -224,70 +275,78 @@ export default function VineyardDetailPage() {
                         {plot.plotNumber}
                       </TableCell>
                       <TableCell>
-                        {plot.area_ha.toFixed(1)} ha
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.soil_moisture.toFixed(0)}%</div>
+                          <div className="text-xs text-muted-foreground">Actual</div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="text-sm">{plot.soilType}</div>
+                          <div className="font-semibold">{plot.currentSensorData.temperature.toFixed(0)}°C</div>
+                          <div className="text-xs text-muted-foreground">Actual</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.soil_ph.toFixed(1)}</div>
+                          <div className="text-xs text-muted-foreground">pH</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.electrical_conductivity.toFixed(1)}</div>
+                          <div className="text-xs text-muted-foreground">mS/cm</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.light_intensity.toFixed(0)}</div>
+                          <div className="text-xs text-muted-foreground">lux</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-semibold">{plot.currentSensorData.brix_current.toFixed(1)}° / {plot.prediction.brix_next_7d.toFixed(1)}°</div>
                           <div className="text-xs text-muted-foreground">
-                            pH: {plot.iotData.soil_ph.toFixed(1)}
+                            Actual / Predicho 7d
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="text-sm">{plot.vineAge} años</div>
+                          <TrendIndicator trend={plot.trends.brix_trend} value="Brix" />
+                          <TrendIndicator trend={plot.trends.moisture_trend} value="Agua" />
+                          {(plot.trends.ph_trend !== 'stable_good' || plot.trends.temp_trend !== 'stable_good') && (
+                            <div className="space-y-1">
+                              {plot.trends.ph_trend !== 'stable_good' && (
+                                <TrendIndicator trend={plot.trends.ph_trend} value="pH" />
+                              )}
+                              {plot.trends.temp_trend !== 'stable_good' && (
+                                <TrendIndicator trend={plot.trends.temp_trend} value="Temp" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <Badge 
+                            variant={
+                              plot.prediction.harvest_recommendation === 'optimal' ? 'default' :
+                              plot.prediction.harvest_recommendation === 'harvest_soon' ? 'secondary' : 'outline'
+                            }
+                            className="text-xs"
+                          >
+                            {plot.prediction.harvest_recommendation === 'optimal' ? 'Óptimo' :
+                             plot.prediction.harvest_recommendation === 'harvest_soon' ? 'Pronto' : 'Esperar'}
+                          </Badge>
                           <div className="text-xs text-muted-foreground">
-                            {plot.exposure}
+                            Calidad: {plot.prediction.quality_score}/100
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {plot.prediction.brix_next_7d}°
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {(plot.prediction.confidence_brix * 100).toFixed(0)}% confianza
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {plot.prediction.yield_final.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            kg/ha
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {plot.prediction.quality_score}/100
-                          </div>
-                          <Progress 
-                            value={plot.prediction.quality_score} 
-                            className="h-1 w-12"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <PlotStatusBadge recommendation={plot.prediction.harvest_recommendation} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {new Date(plot.prediction.expected_harvest_date).toLocaleDateString('es-ES', {
-                            day: '2-digit',
-                            month: 'short'
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          Ver Detalles
-                        </Button>
+                        <AlertBadge alert={plot.alerts} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -297,67 +356,134 @@ export default function VineyardDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Resumen de condiciones ambientales */}
+        {/* Resumen de condiciones ambientales por parcela */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Thermometer className="h-5 w-5" />
-              Condiciones Ambientales Promedio
+              Condiciones Ambientales por Parcela
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Thermometer className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">Temperatura</span>
+            <div className="space-y-4">
+              {plots.map((plot) => (
+                <div key={plot.id} className="border rounded-lg p-4 bg-muted/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold">Parcela #{plot.plotNumber}</h4>
+                    <div className="text-sm text-muted-foreground">
+                      {plot.area_ha.toFixed(1)} ha • {plot.soilType} • {plot.exposure}
+                    </div>
+                  </div>
+                  
+                  <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Thermometer className="h-4 w-4 text-orange-500" />
+                        <span className="text-sm font-medium">Temperatura</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.temperature.toFixed(1)}°C
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {plot.trends.temp_trend !== 'stable_good' && (
+                          <TrendIndicator trend={plot.trends.temp_trend} value="Temp" />
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Droplets className="h-4 w-4 text-blue-500" />
+                        <span className="text-sm font-medium">Humedad Suelo</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.soil_moisture.toFixed(0)}%
+                      </div>
+                      <div className="text-xs">
+                        <TrendIndicator trend={plot.trends.moisture_trend} value="↗7d: " />
+                        <span className="text-muted-foreground ml-1">
+                          {plot.prediction.soil_moisture_next_7d.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Grape className="h-4 w-4 text-purple-500" />
+                        <span className="text-sm font-medium">°Brix</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.brix_current.toFixed(1)}°
+                      </div>
+                      <div className="text-xs">
+                        <TrendIndicator trend={plot.trends.brix_trend} value="↗7d: " />
+                        <span className="text-muted-foreground ml-1">
+                          {plot.prediction.brix_next_7d.toFixed(1)}°
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Leaf className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-medium">pH Suelo</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.soil_ph.toFixed(1)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {plot.trends.ph_trend !== 'stable_good' && (
+                          <TrendIndicator trend={plot.trends.ph_trend} value="pH" />
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-yellow-500" />
+                        <span className="text-sm font-medium">EC</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.electrical_conductivity.toFixed(1)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        mS/cm
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Sun className="h-4 w-4 text-yellow-600" />
+                        <span className="text-sm font-medium">Luz</span>
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {plot.currentSensorData.light_intensity.toFixed(0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        lux
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Información adicional de la parcela */}
+                  <div className="mt-4 pt-3 border-t border-muted">
+                    <div className="grid gap-2 sm:grid-cols-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Plantación:</span>
+                        <span className="ml-1 font-medium">{plot.plantingYear} ({plot.vineAge} años)</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Pendiente:</span>
+                        <span className="ml-1 font-medium">{plot.slope}°</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">M. Orgánica:</span>
+                        <span className="ml-1 font-medium">{plot.iotData.organic_matter.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.temp_mean_7d.toFixed(1)}°C
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Media 7 días
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Droplets className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium">Humedad Rel.</span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.hr_max_3d.toFixed(0)}%
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Máxima 3 días
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Droplets className="h-4 w-4 text-green-500" />
-                  <span className="text-sm font-medium">Humedad Suelo</span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.soil_moist_mean_24h.toFixed(0)}%
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Media 24h
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Leaf className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-medium">NDVI</span>
-                </div>
-                <div className="text-lg font-semibold">
-                  {vineyard.iotData.ndvi_anom.toFixed(3)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Anomalía NDVI
-                </div>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>

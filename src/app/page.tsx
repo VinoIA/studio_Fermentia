@@ -1,3 +1,5 @@
+// src/app/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -175,8 +177,8 @@ const ChatPanel: React.FC = () => {
                   <div className="text-center text-muted-foreground py-8 px-4 rounded-lg bg-muted/50">
                     <Wine className="mx-auto h-10 w-10 mb-4 text-primary" />
                     <h3 className="font-semibold text-lg text-foreground mb-2">¡Bienvenido a Fermentia!</h3>
-                    <p className="text-sm">¡Pregúntame sobre tus viñedos y predicciones de cosecha!</p>
-                    <p className="text-xs mt-2">ej: "¿Cuáles son las predicciones de °Brix?" o "¿Cuándo cosechar Finca Roble Alto?"</p>
+                    <p className="text-sm">¡Pregúntame sobre sensores IoT, predicciones y alertas de tus viñedos!</p>
+                    <p className="text-xs mt-2">ej: "¿Hay alertas críticas?" • "Sensores de Finca Roble Alto" • "¿Qué parcelas tienen pH alto?"</p>
                   </div>
                 )}
                 {messages.map((message) => (
@@ -294,6 +296,7 @@ const Header: React.FC = () => (
         </div>
     </header>
 );
+// src/app/page.tsx
 
 export default function DashboardPage() {
   const [vineyards] = useState<Vineyard[]>(getVineyards());
@@ -311,6 +314,14 @@ export default function DashboardPage() {
     
     loadPredictions();
   }, [vineyards]);
+
+  // CÁLCULO DE ALERTAS CRÍTICAS - ASEGÚRATE DE QUE ESTÉ AQUÍ, DENTRO DEL COMPONENTE
+  const totalCriticalAlerts = vineyards.reduce((acc, vineyard) => {
+    const criticalPlotsInVineyard = vineyard.plots.filter(
+      (plot) => plot.alerts.priority === 'critical'
+    ).length;
+    return acc + criticalPlotsInVineyard;
+  }, 0);
   
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -368,16 +379,19 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
               
+              {/* TARJETA CORREGIDA Y USANDO LA VARIABLE CORRECTA */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Alertas Activas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Alertas Críticas</CardTitle>
                   <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {vineyards.filter(v => v.iotData.pests).length}
+                    {totalCriticalAlerts}
                   </div>
-                  <p className="text-xs text-muted-foreground">Plagas detectadas</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total de parcelas que requieren acción
+                  </p>
                 </CardContent>
               </Card>
             </div>
