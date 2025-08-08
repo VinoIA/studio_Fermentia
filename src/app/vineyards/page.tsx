@@ -1,11 +1,8 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import {
   Plus,
-  Edit,
   Trash2,
   Eye,
   BarChart3,
@@ -13,7 +10,6 @@ import {
   TrendingUp,
   Grape,
   Wine,
-  Bot,
   RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,9 +19,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Vineyard, HarvestPrediction } from '@/types';
 import { VineyardCRUDModal } from '@/components/ui/vineyard-crud-modal';
-import { AIChatModal } from '@/components/ui/ai-chat-modal';
-import { AIRecommendations } from '@/components/ui/ai-recommendations';
-import { AINotificationSystem, useAINotifications } from '@/components/ui/ai-notification-system';
 import { fetchVineyards } from '@/lib/api';
 
 interface VineyardStats {
@@ -45,13 +38,8 @@ export default function VineyardsPage() {
   const [predictions, setPredictions] = useState<Map<string, HarvestPrediction>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVineyard, setSelectedVineyard] = useState<Vineyard | null>(null);
-  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete' | 'view'>('view');
+  const [modalMode, setModalMode] = useState<'create' | 'delete' | 'view'>('view');
   const [showCRUDModal, setShowCRUDModal] = useState(false);
-  const [showAIChat, setShowAIChat] = useState(false);
-  const [showAIRecommendations, setShowAIRecommendations] = useState(false);
-
-  // Hook para notificaciones de IA
-  const { hasUnreadCritical } = useAINotifications();
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -152,7 +140,7 @@ export default function VineyardsPage() {
     setSelectedVineyard(null);
   };
 
-  const openCRUDModal = (mode: 'create' | 'edit' | 'delete' | 'view', vineyard?: Vineyard) => {
+  const openCRUDModal = (mode: 'create' | 'delete' | 'view', vineyard?: Vineyard) => {
     setModalMode(mode);
     setSelectedVineyard(vineyard || null);
     setShowCRUDModal(true);
@@ -200,15 +188,6 @@ export default function VineyardsPage() {
               >
                 <Eye className="h-3 w-3 mr-1" />
                 Ver
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openCRUDModal('edit', vineyard)}
-                className="flex-1"
-              >
-                <Edit className="h-3 w-3 mr-1" />
-                Editar
               </Button>
               <Button
                 variant="outline"
@@ -296,8 +275,6 @@ export default function VineyardsPage() {
     </Card>
   );
 
-  // Header is now handled by TopNav in layout
-
   if (isLoading) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -314,7 +291,7 @@ export default function VineyardsPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <main className="flex-1 p-4 md:p-6 space-y-6">
-        {/* Header de la página con acciones */}
+        {/* Header de la página */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Gestión de Viñedos</h1>
@@ -323,29 +300,6 @@ export default function VineyardsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowAIRecommendations(true)}
-              className={`flex items-center gap-2 relative ${
-                hasUnreadCritical ? 'border-red-500 text-red-600 hover:bg-red-50' : ''
-              }`}
-            >
-              <Bot className="h-4 w-4" />
-              Recomendaciones IA
-              {hasUnreadCritical && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse">
-                  <div className="absolute inset-0 bg-red-500 rounded-full animate-ping"></div>
-                </div>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowAIChat(true)}
-              className="flex items-center gap-2"
-            >
-              <Bot className="h-4 w-4" />
-              Chat IA
-            </Button>
             <Button
               onClick={() => openCRUDModal('create')}
               className="flex items-center gap-2"
@@ -385,17 +339,6 @@ export default function VineyardsPage() {
               variant={stats.pestPercentage > 0 ? 'destructive' : 'default'}
             />
           </div>
-        )}
-
-        {/* Alertas */}
-        {stats && stats.withPests > 0 && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Atención:</strong> Se han detectado plagas en {stats.withPests} viñedo(s). 
-              Se recomienda realizar inspecciones y aplicar tratamientos preventivos.
-            </AlertDescription>
-          </Alert>
         )}
 
         {/* Contenido principal con tabs */}
@@ -491,13 +434,6 @@ export default function VineyardsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => openCRUDModal('edit', vineyard)}
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
                                 onClick={() => openCRUDModal('delete', vineyard)}
                                 className="text-destructive hover:text-destructive"
                               >
@@ -516,31 +452,13 @@ export default function VineyardsPage() {
         </Tabs>
       </main>
 
-      {/* Modales */}
+      {/* Modal CRUD */}
       <VineyardCRUDModal
         isOpen={showCRUDModal}
         onClose={() => setShowCRUDModal(false)}
         vineyard={selectedVineyard}
         mode={modalMode}
         onSuccess={handleCRUDSuccess}
-      />
-
-      {/* TODO: Arreglar props de estos modales */}
-      {/* <AIChatModal
-        isOpen={showAIChat}
-        onClose={() => setShowAIChat(false)}
-      />
-
-      <AIRecommendations
-        isOpen={showAIRecommendations}
-        onClose={() => setShowAIRecommendations(false)}
-        vineyards={vineyards}
-      /> */}
-
-      {/* Sistema de notificaciones de IA */}
-      <AINotificationSystem 
-        enabled={true}
-        position="top-right"
       />
     </div>
   );

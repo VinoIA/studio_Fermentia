@@ -20,7 +20,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Plus, 
-  Edit2, 
   Trash2, 
   Save, 
   X, 
@@ -33,14 +32,14 @@ import {
   CheckCircle
 } from 'lucide-react';
 import type { Vineyard } from '@/types';
-import { createVineyard, updateVineyard, deleteVineyard } from '@/app/vineyard-actions';
+import { createVineyard, deleteVineyard } from '@/lib/api';
 import { chatWithFermentia } from '@/app/actions';
 
 interface VineyardCRUDModalProps {
   isOpen: boolean;
   onClose: () => void;
   vineyard?: Vineyard | null;
-  mode: 'create' | 'edit' | 'delete' | 'view';
+  mode: 'create' | 'delete' | 'view';
   onSuccess?: (vineyard?: Vineyard) => void;
 }
 
@@ -100,7 +99,7 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
 
   // Inicializar formulario cuando cambia el viñedo
   useEffect(() => {
-    if (vineyard && (mode === 'edit' || mode === 'view' || mode === 'delete')) {
+    if (vineyard && (mode === 'view' || mode === 'delete')) {
       setFormData({
         name: vineyard.name,
         location: vineyard.location,
@@ -138,7 +137,7 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
     try {
       const context = mode === 'create' 
         ? `Estoy creando un nuevo viñedo con nombre "${formData.name}" en "${formData.location}". Variedades: ${formData.grapeVarietals}.`
-        : `Estoy editando el viñedo "${formData.name}" en "${formData.location}". Datos IoT actuales: ${JSON.stringify(formData.iotData)}.`;
+        : `Estoy revisando el viñedo "${formData.name}" en "${formData.location}". Datos IoT actuales: ${JSON.stringify(formData.iotData)}.`;
       
       const response = await chatWithFermentia(
         [],
@@ -170,39 +169,96 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
     }
   };
 
+  // Validar datos del formulario
+  const validateFormData = (data: VineyardFormData): string | null => {
+    if (!data.name.trim()) return 'El nombre del viñedo es requerido';
+    if (!data.location.trim()) return 'La ubicación es requerida';
+    if (!data.grapeVarietals.trim()) return 'La variedad de uva es requerida';
+    if (data.totalPlots < 1) return 'El número de parcelas debe ser mayor a 0';
+    if (data.temperature < -10 || data.temperature > 50) return 'La temperatura debe estar entre -10°C y 50°C';
+    if (data.humidity < 0 || data.humidity > 100) return 'La humedad debe estar entre 0% y 100%';
+    if (!data.harvestStatus.trim()) return 'El estado de cosecha es requerido';
+    if (!data.harvestDate) return 'La fecha de cosecha es requerida';
+    return null;
+  };
+
+  // Convertir formData a formato compatible con la API
+  const convertFormDataForAPI = (data: VineyardFormData) => {
+    return {
+      name: data.name,
+      location: data.location,
+      grapeVarietals: data.grapeVarietals,
+      totalPlots: data.totalPlots,
+      temperature: data.temperature,
+      humidity: data.humidity,
+      harvestStatus: data.harvestStatus,
+      harvestDate: data.harvestDate,
+      iotData: data.iotData
+    };
+  };
+
   // Manejar envío del formulario
   const handleSubmit = async () => {
     setIsLoading(true);
     setError('');
 
     try {
-      let result;
-      
-      if (mode === 'create') {
-        result = await createVineyard(formData);
-        if (result?.success) {
-          onSuccess?.(result.vineyard);
-          onClose();
-        }
-      } else if (mode === 'edit' && vineyard) {
-        result = await updateVineyard(vineyard.id, formData);
-        if (result?.success) {
-          onSuccess?.(result.vineyard);
-          onClose();
-        }
-      } else if (mode === 'delete' && vineyard) {
-        result = await deleteVineyard(vineyard.id);
-        if (result?.success) {
-          onSuccess?.();
-          onClose();
+      // Validar datos antes de enviar (excepto para delete)
+      if (mode !== 'delete') {
+        const validationError = validateFormData(formData);
+        if (validationError) {
+          setError(validationError);
+          setIsLoading(false);
+          return;
         }
       }
 
-      if (result && !result.success) {
-        setError(result.error || 'Error en la operación');
+      const apiData = convertFormDataForAPI(formData);
+      
+      if (mode === 'create') {
+        console.log('🔄 Creating vineyard with data:', apiData);
+        const result = await createVineyard(apiData);
+        console.log('✅ Vineyard created:', result);
+        onSuccess?.(result);
+        onClose();
+      } else if (mode === 'delete' && vineyard) {
+        console.log(`🔄 Deleting vineyard: ${vineyard.name} (ID: ${vineyard.id})`);
+        console.log('🔄 Vineyard details:', {
+          id: vineyard.id,
+          name: vineyard.name,
+          location: vineyard.location
+        });
+        
+        const success = await deleteVineyard(vineyard.id);
+        
+        if (success) {
+          console.log('✅ Vineyard deleted successfully');
+          onSuccess?.();
+          onClose();
+        } else {
+          throw new Error('Delete operation returned false');
+        }
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Error desconocido');
+      console.error('❌ Error in CRUD operation:', error);
+      
+      // Crear un mensaje de error más descriptivo
+      let errorMessage = 'Error desconocido en la operación';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Personalizar mensajes para diferentes tipos de errores
+        if (errorMessage.includes('404')) {
+          errorMessage = `No se pudo encontrar el viñedo "${vineyard?.name || 'desconocido'}" en la base de datos. Es posible que ya haya sido eliminado.`;
+        } else if (errorMessage.includes('Failed to delete')) {
+          errorMessage = `Error al eliminar el viñedo "${vineyard?.name || 'desconocido'}": ${errorMessage}`;
+        } else if (errorMessage.includes('not found')) {
+          errorMessage = `El viñedo "${vineyard?.name || 'desconocido'}" no se encuentra en el sistema.`;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -211,7 +267,6 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
   const getTitle = () => {
     switch (mode) {
       case 'create': return 'Crear Nuevo Viñedo';
-      case 'edit': return 'Editar Viñedo';
       case 'delete': return 'Eliminar Viñedo';
       case 'view': return 'Detalles del Viñedo';
       default: return 'Viñedo';
@@ -221,7 +276,6 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
   const getButtonText = () => {
     switch (mode) {
       case 'create': return 'Crear Viñedo';
-      case 'edit': return 'Guardar Cambios';
       case 'delete': return 'Eliminar';
       default: return 'Cerrar';
     }
@@ -233,13 +287,11 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {mode === 'create' && <Plus className="h-5 w-5" />}
-            {mode === 'edit' && <Edit2 className="h-5 w-5" />}
             {mode === 'delete' && <Trash2 className="h-5 w-5" />}
             {getTitle()}
           </DialogTitle>
           <DialogDescription>
             {mode === 'create' && 'Crea un nuevo viñedo con información detallada y datos IoT.'}
-            {mode === 'edit' && 'Modifica la información del viñedo y sus datos IoT.'}
             {mode === 'delete' && '¿Estás seguro de que quieres eliminar este viñedo? Esta acción no se puede deshacer.'}
             {mode === 'view' && 'Información detallada del viñedo.'}
           </DialogDescription>

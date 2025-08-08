@@ -33,9 +33,8 @@ import { getHarvestPrediction } from "@/lib/data";
 const VineyardIslandCard: React.FC<{ 
   vineyard: Vineyard; 
   prediction: HarvestPrediction | null; 
-  onEdit: () => void; 
   onView: () => void 
-}> = ({ vineyard, prediction, onEdit, onView }) => (
+}> = ({ vineyard, prediction, onView }) => (
   <Card className="group hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-800/50 overflow-hidden">
     <CardContent className="p-0">
       {/* Header con gradiente */}
@@ -140,13 +139,6 @@ const VineyardIslandCard: React.FC<{
           >
             Ver Detalles
           </Button>
-          <Button 
-            size="sm" 
-            onClick={onEdit} 
-            className="flex-1 text-xs bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-          >
-            Gestionar
-          </Button>
         </div>
       </div>
     </CardContent>
@@ -206,7 +198,7 @@ export default function DashboardPage() {
   const [showAIChat, setShowAIChat] = useState(false);
   const [showAIRecommendations, setShowAIRecommendations] = useState(false);
   const [selectedVineyard, setSelectedVineyard] = useState<Vineyard | null>(null);
-  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'delete' | 'view'>('view');
+  const [modalMode, setModalMode] = useState<'create' | 'delete' | 'view'>('view');
   const [alertsShown, setAlertsShown] = useState<Set<string>>(new Set()); // Evitar spam de alertas
   const [welcomeMessage, setWelcomeMessage] = useState<string>('');
   
@@ -214,6 +206,37 @@ export default function DashboardPage() {
     // Cargar datos en el cliente desde la API real
     loadVineyardsFromAPI();
   }, []);
+
+  // Datos de demostración como fallback
+  const getDemoData = () => {
+    return [
+      {
+        id: "demo-1",
+        name: "Viñedo Demostración",
+        location: "Valle Demo",
+        grapeVarietals: "Demostración",
+        totalPlots: 10,
+        temperature: 22,
+        humidity: 65,
+        harvestStatus: "Demo",
+        harvestDate: new Date().toISOString().split('T')[0],
+        imageUrl: "/imgs/1.jpg",
+        imageHint: "demo vineyard",
+        iotData: {
+          pests: false,
+          temp_mean_7d: 22,
+          hr_max_3d: 65,
+          soil_moist_mean_24h: 50,
+          ndvi_anom: 0,
+          evi_anom: 0,
+          sin_day: 0,
+          cos_day: 1,
+          variedad_onehot: [1, 0, 0],
+          surface_ha: 10
+        }
+      }
+    ];
+  };
 
   const loadVineyardsFromAPI = async () => {
     try {
@@ -223,16 +246,22 @@ export default function DashboardPage() {
       const apiVineyards = await fetchVineyards();
       console.log('✅ Viñedos obtenidos:', apiVineyards.length);
       
+      // Validar que apiVineyards sea un array
+      if (!Array.isArray(apiVineyards)) {
+        console.error('❌ fetchVineyards no devolvió un array:', typeof apiVineyards);
+        throw new Error('Invalid data format received from API');
+      }
+      
       setVineyards(apiVineyards);
       
-      // Generar estadísticas
+      // Generar estadísticas de forma segura
       const statsData: VineyardStats = {
         total: apiVineyards.length,
         totalPlots: apiVineyards.reduce((sum, v) => sum + (v.totalPlots || 10), 0),
         averageTemperature: apiVineyards.length > 0 ? 
-          Math.round(apiVineyards.reduce((sum, v) => sum + v.temperature, 0) / apiVineyards.length * 10) / 10 : 0,
+          Math.round(apiVineyards.reduce((sum, v) => sum + (v.temperature || 0), 0) / apiVineyards.length * 10) / 10 : 0,
         averageHumidity: apiVineyards.length > 0 ? 
-          Math.round(apiVineyards.reduce((sum, v) => sum + v.humidity, 0) / apiVineyards.length * 10) / 10 : 0,
+          Math.round(apiVineyards.reduce((sum, v) => sum + (v.humidity || 0), 0) / apiVineyards.length * 10) / 10 : 0,
         withPests: apiVineyards.filter(v => v.iotData?.pests).length,
         pestPercentage: apiVineyards.length > 0 ? 
           Math.round((apiVineyards.filter(v => v.iotData?.pests).length / apiVineyards.length) * 100) : 0,
@@ -240,15 +269,19 @@ export default function DashboardPage() {
       };
       setStats(statsData);
 
-      // Generar predicciones
+      // Generar predicciones de forma segura
       const predictionMap: { [key: string]: HarvestPrediction | null } = {};
       apiVineyards.forEach((vineyard: Vineyard) => {
         try {
-          const prediction = getHarvestPrediction(vineyard.id);
-          predictionMap[vineyard.id] = prediction;
+          if (vineyard && vineyard.id) {
+            const prediction = getHarvestPrediction(vineyard.id);
+            predictionMap[vineyard.id] = prediction;
+          }
         } catch (error) {
-          console.warn(`No se pudo generar predicción para viñedo ${vineyard.id}`);
-          predictionMap[vineyard.id] = null;
+          console.warn(`No se pudo generar predicción para viñedo ${vineyard?.id || 'unknown'}`);
+          if (vineyard?.id) {
+            predictionMap[vineyard.id] = null;
+          }
         }
       });
       setPredictions(predictionMap);
@@ -256,8 +289,8 @@ export default function DashboardPage() {
       // Mensaje de bienvenida de Fermentia
       if (apiVineyards.length > 0) {
         const pestCount = statsData.withPests;
-        const locations = [...new Set(apiVineyards.map(v => v.location))];
-        const varieties = [...new Set(apiVineyards.map(v => v.grapeVarietals))];
+        const locations = [...new Set(apiVineyards.map(v => v.location).filter(Boolean))];
+        const varieties = [...new Set(apiVineyards.map(v => v.grapeVarietals).filter(Boolean))];
         
         let welcomeMsg = `🤖 ¡Hola! Soy Fermentia, tu asistente IA para viñedos. `;
         welcomeMsg += `He encontrado ${statsData.total} viñedo${statsData.total !== 1 ? 's' : ''} `;
@@ -279,7 +312,29 @@ export default function DashboardPage() {
       
     } catch (error) {
       console.error('❌ Error cargando viñedos:', error);
-      setWelcomeMessage('🤖 ¡Hola! Soy Fermentia. Tuve problemas conectando con la API. ¿Quieres que lo intente de nuevo?');
+      console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack available');
+      
+      // Usar datos de demostración como fallback
+      console.log('🛡️ Usando datos de demostración como fallback');
+      const demoData = getDemoData();
+      setVineyards(demoData);
+      
+      const demoStats = {
+        total: demoData.length,
+        totalPlots: demoData.reduce((sum, v) => sum + (v.totalPlots || 10), 0),
+        averageTemperature: demoData.length > 0 ? 
+          Math.round(demoData.reduce((sum, v) => sum + (v.temperature || 0), 0) / demoData.length * 10) / 10 : 0,
+        averageHumidity: demoData.length > 0 ? 
+          Math.round(demoData.reduce((sum, v) => sum + (v.humidity || 0), 0) / demoData.length * 10) / 10 : 0,
+        withPests: demoData.filter(v => v.iotData?.pests).length,
+        pestPercentage: 0,
+        lastUpdated: new Date().toLocaleTimeString('es-ES')
+      };
+      setStats(demoStats);
+      setPredictions({});
+      
+      setWelcomeMessage('🤖 ¡Hola! Soy Fermentia. No pude conectar con la API, pero estoy usando datos de demostración. ¿Te ayudo a gestionar tus viñedos?');
     } finally {
       setIsLoading(false);
     }
@@ -291,7 +346,7 @@ export default function DashboardPage() {
     setShowCRUDModal(false);
   };
 
-  const openCRUDModal = (mode: 'create' | 'edit' | 'delete' | 'view', vineyard?: Vineyard) => {
+  const openCRUDModal = (mode: 'create' | 'delete' | 'view', vineyard?: Vineyard) => {
     setModalMode(mode);
     setSelectedVineyard(vineyard || null);
     setShowCRUDModal(true);
@@ -382,28 +437,6 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowAIRecommendations(true)}
-              className="flex items-center gap-2"
-            >
-              <Bot className="h-4 w-4" />
-              Recomendaciones IA
-            </Button>
-            <Button
-              onClick={() => setShowAIChat(true)}
-              className="flex items-center gap-2"
-            >
-              <Bot className="h-4 w-4" />
-              Chat con Fermentia
-            </Button>
-            <Button
-              onClick={() => openCRUDModal('create')}
-              className="flex items-center gap-2"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Nuevo Viñedo
-            </Button>
           </div>
         </div>
 
@@ -504,7 +537,6 @@ export default function DashboardPage() {
                   key={vineyard.id}
                   vineyard={vineyard}
                   prediction={predictions[vineyard.id]}
-                  onEdit={() => openCRUDModal('edit', vineyard)}
                   onView={() => openCRUDModal('view', vineyard)}
                 />
               ))}

@@ -15,31 +15,57 @@ export interface VineyardAPI {
 
 // Mapear datos de la API a nuestro formato interno
 export function mapAPIToInternal(apiVineyard: VineyardAPI): any {
-  return {
-    id: apiVineyard.id.toString(),
-    name: apiVineyard.nombre,
-    location: apiVineyard.ubicacion,
-    grapeVarietals: apiVineyard.variedadUva,
-    totalPlots: Math.floor(Math.random() * 20) + 5, // Simular parcelas
-    harvestStatus: apiVineyard.estadoCosecha,
-    temperature: apiVineyard.temperatura,
-    humidity: apiVineyard.humedad,
-    harvestDate: apiVineyard.fechaCosecha,
-    imageUrl: `/imgs/${Math.floor(Math.random() * 4) + 1}.${Math.random() > 0.5 ? 'jpg' : 'png'}`,
-    imageHint: "vineyard aerial view",
-    iotData: {
-      pests: Math.random() < 0.2, // 20% probabilidad de plagas
-      temp_mean_7d: apiVineyard.temperatura,
-      hr_max_3d: apiVineyard.humedad,
-      soil_moist_mean_24h: 40 + Math.random() * 30,
-      ndvi_anom: -0.2 + Math.random() * 0.4,
-      evi_anom: -0.15 + Math.random() * 0.3,
-      sin_day: Math.sin(2 * Math.PI * new Date().getDay() / 365),
-      cos_day: Math.cos(2 * Math.PI * new Date().getDay() / 365),
-      variedad_onehot: [1, 0, 0, 0, 0], // Simplificado
-      surface_ha: 10 + Math.random() * 50
+  try {
+    console.log('🔄 Mapping vineyard:', apiVineyard.nombre || 'Unknown');
+    
+    // Validar que los campos requeridos existen
+    if (!apiVineyard.id) {
+      throw new Error('Missing required field: id');
     }
-  };
+    if (!apiVineyard.nombre) {
+      throw new Error('Missing required field: nombre');
+    }
+    if (!apiVineyard.ubicacion) {
+      throw new Error('Missing required field: ubicacion');
+    }
+    
+    // Asegurar que los valores numéricos sean válidos
+    const temperatura = typeof apiVineyard.temperatura === 'number' ? apiVineyard.temperatura : 22;
+    const humedad = typeof apiVineyard.humedad === 'number' ? apiVineyard.humedad : 65;
+    
+    const mapped = {
+      id: apiVineyard.id.toString(),
+      name: apiVineyard.nombre,
+      location: apiVineyard.ubicacion,
+      grapeVarietals: apiVineyard.variedadUva || 'Desconocida',
+      totalPlots: Math.floor(Math.random() * 20) + 5, // Simular parcelas
+      harvestStatus: apiVineyard.estadoCosecha || 'Pendiente',
+      temperature: temperatura,
+      humidity: humedad,
+      harvestDate: apiVineyard.fechaCosecha || new Date().toISOString().split('T')[0],
+      imageUrl: `/imgs/${Math.floor(Math.random() * 4) + 1}.${Math.random() > 0.5 ? 'jpg' : 'png'}`,
+      imageHint: "vineyard aerial view",
+      iotData: {
+        pests: Math.random() < 0.2, // 20% probabilidad de plagas
+        temp_mean_7d: temperatura,
+        hr_max_3d: humedad,
+        soil_moist_mean_24h: 40 + Math.random() * 30,
+        ndvi_anom: -0.2 + Math.random() * 0.4,
+        evi_anom: -0.15 + Math.random() * 0.3,
+        sin_day: Math.sin(2 * Math.PI * new Date().getDay() / 365),
+        cos_day: Math.cos(2 * Math.PI * new Date().getDay() / 365),
+        variedad_onehot: [1, 0, 0, 0, 0], // Simplificado
+        surface_ha: 10 + Math.random() * 50
+      }
+    };
+    
+    console.log('✅ Successfully mapped vineyard:', mapped.name);
+    return mapped;
+  } catch (error) {
+    console.error('❌ Error in mapAPIToInternal:', error);
+    console.error('❌ Input data:', JSON.stringify(apiVineyard, null, 2));
+    throw error;
+  }
 }
 
 // Mapear datos internos a formato de API

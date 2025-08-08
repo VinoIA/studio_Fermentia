@@ -172,8 +172,8 @@ export default function RecommendationsPage() {
       {!state.loading && state.recommendations.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {state.recommendations.map((recommendation) => {
-            const PriorityIcon = priorityIcons[recommendation.priority];
-            const TypeIcon = typeIcons[recommendation.type];
+            const PriorityIcon = priorityIcons[recommendation.priority] || Info;
+            const TypeIcon = typeIcons[recommendation.type] || Info;
             
             return (
               <Card key={recommendation.id} className="h-full">
