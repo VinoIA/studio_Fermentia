@@ -1,7 +1,6 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -17,21 +16,14 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    unoptimized: true, // Para deployment en Netlify
+    unoptimized: true,
   },
-  output: 'standalone', // Para mejor compatibilidad con Netlify
-  experimental: {
-    esmExternals: true,
-  },
-  // Optimizaciones para Netlify
+  // Configuración optimizada para Netlify
   trailingSlash: false,
   generateEtags: false,
   poweredByHeader: false,
   compress: true,
-  // Manejo de variables de entorno
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
-  },
+  serverExternalPackages: ['genkit'],
 };
 
 export default nextConfig;
