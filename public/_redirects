@@ -1,0 +1,9 @@
+# API routes to Netlify Functions
+/api/*  /.netlify/functions/:splat  200
+
+# Static assets
+/favicon.ico  /favicon.ico  200
+/imgs/*  /imgs/:splat  200
+
+# SPA fallback for client-side routing
+/*    /index.html   200

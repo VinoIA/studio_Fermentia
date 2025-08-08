@@ -33,12 +33,17 @@ yarn-error.log*
 # vercel
 .vercel
 
+# netlify
+.netlify
+netlify-debug.log*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
 .genkit/*
 .env*
+!.env.example
 
 # firebase
 firebase-debug.log
