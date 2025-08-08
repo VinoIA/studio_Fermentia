@@ -292,7 +292,7 @@ export async function deleteVineyard(id: string): Promise<boolean> {
         try {
           const mapped = mapAPIToInternal(apiVineyard);
           if (mapped.id === id) {
-            targetApiVineyard = apiVineyard;
+        console.log('🔍 Fetching all vineyards from API...');
             console.log(`✅ Found matching vineyard: ${apiVineyard.nombre} (API ID: ${apiVineyard.id})`);
             break;
           }
@@ -319,7 +319,7 @@ export async function deleteVineyard(id: string): Promise<boolean> {
         'Content-Type': 'application/json',
       },
     });
-
+          console.log(`🔎 Search by numeric ID ${numericId}: ${targetApiVineyard ? 'FOUND' : 'NOT FOUND'}`);
     console.log(`📡 DELETE response status: ${deleteResponse.status}`);
 
     if (!deleteResponse.ok) {

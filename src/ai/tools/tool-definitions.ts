@@ -115,12 +115,20 @@ export const OPENAI_TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          id: { 
-            type: "string", 
-            description: "ID del viñedo a eliminar (de la API)" 
+          id: {
+            type: "string",
+            description: "ID del viñedo a eliminar (ID interno mostrado por FermentIA)"
+          },
+          nombre: {
+            type: "string",
+            description: "Nombre del viñedo a eliminar cuando no se conoce el ID"
+          },
+          confirm: {
+            type: "boolean",
+            description: "Si es true, procede a eliminar sin preguntar"
           }
         },
-        required: ["id"],
+        // Permite eliminar por id o por nombre; ninguno es estrictamente obligatorio
         additionalProperties: false
       }
     }

@@ -221,27 +221,94 @@ export async function updateVineyardTool(params: {
   }
 }
 
-// Herramienta para eliminar viñedos de la API real
-export async function deleteVineyardTool(params: { id: string }): Promise<ToolResult> {
+// Herramienta para eliminar viñedos de la API real (por id o por nombre)
+export async function deleteVineyardTool(params: { id?: string; nombre?: string; confirm?: boolean }): Promise<ToolResult> {
   try {
-    // Primero obtener el viñedo para el mensaje de confirmación
-    const vineyard = await fetchVineyardById(params.id);
-    if (!vineyard) {
+    const now = Date.now();
+    let targetId = params.id?.toString().trim();
+    let vineyard: any | null = null;
+
+    // Si no hay ID pero hay nombre, buscarlo primero
+    if (!targetId && params.nombre) {
+      const all = await fetchVineyards();
+      const match = all.filter(v => v.name.toLowerCase().includes(params.nombre!.toLowerCase()));
+      if (match.length === 0) {
+        return {
+          success: false,
+          error: `No encontré viñedos que coincidan con "${params.nombre}"`,
+          action: {
+            id: now.toString(),
+            type: 'DELETE',
+            entity: 'vineyard',
+            description: `❌ Sin coincidencias por nombre: ${params.nombre}`,
+            timestamp: now,
+            executed: false
+          }
+        };
+      }
+      if (match.length > 1) {
+        return {
+          success: false,
+          error: `Hay ${match.length} coincidencias para "${params.nombre}". Especifica el ID exacto.`,
+          action: {
+            id: now.toString(),
+            type: 'DELETE',
+            entity: 'vineyard',
+            description: `⚠️ Varias coincidencias por nombre: ${params.nombre}`,
+            data: { candidatos: match.map(v => ({ id: v.id, nombre: v.name, ubicacion: v.location })) },
+            timestamp: now,
+            executed: false
+          }
+        };
+      }
+      targetId = match[0].id;
+      vineyard = match[0];
+    }
+
+    if (!targetId) {
       return {
         success: false,
-        error: `Viñedo con ID ${params.id} no encontrado`,
+        error: 'Falta el ID o el nombre del viñedo a eliminar',
         action: {
-          id: Date.now().toString(),
+          id: now.toString(),
           type: 'DELETE',
           entity: 'vineyard',
-          description: `❌ Viñedo ID ${params.id} no existe`,
-          timestamp: Date.now(),
+          description: '❌ Parámetros insuficientes para eliminar',
+          timestamp: now,
           executed: false
         }
       };
     }
-    
-    const success = await deleteVineyard(params.id);
+
+    // Obtener el viñedo por ID para confirmar datos
+    if (!vineyard) {
+      vineyard = await fetchVineyardById(targetId);
+    }
+    if (!vineyard) {
+      return {
+        success: false,
+        error: `Viñedo con ID ${targetId} no encontrado`,
+        action: {
+          id: now.toString(),
+          type: 'DELETE',
+          entity: 'vineyard',
+          description: `❌ Viñedo ID ${targetId} no existe`,
+          timestamp: now,
+          executed: false
+        }
+      };
+    }
+
+    // Confirmación simple (placeholder para flujos con confirm modal)
+    if (params.confirm === false) {
+      return {
+        success: false,
+        error: 'Operación cancelada por el usuario',
+        requiresConfirmation: true
+      };
+    }
+
+    const success = await deleteVineyard(targetId);
     
     if (!success) {
       return {
@@ -258,20 +325,27 @@ export async function deleteVineyardTool(params: { id: string }): Promise<ToolRe
       };
     }
     
+    // Verificar refrescando lista para asegurar que ya no aparece
+    let remaining: any[] = [];
+    try {
+      remaining = await fetchVineyards();
+    } catch {}
+    const stillExists = remaining.some(v => v.id === (targetId as string));
+
     return {
       success: true,
-      data: { deletedVineyard: vineyard },
+      data: { deletedVineyard: vineyard, verified: !stillExists },
       action: {
-        id: Date.now().toString(),
+        id: now.toString(),
         type: 'DELETE',
         entity: 'vineyard',
-        description: `🗑️ Viñedo eliminado exitosamente: "${vineyard.name}" (ID: ${params.id})`,
+        description: `🗑️ Viñedo eliminado: "${vineyard.name}" (ID: ${targetId})`,
         data: { 
-          id: params.id, 
+          id: targetId, 
           nombre: vineyard.name,
           ubicacion: vineyard.location
         },
-        timestamp: Date.now(),
+        timestamp: now,
         executed: true
       }
     };

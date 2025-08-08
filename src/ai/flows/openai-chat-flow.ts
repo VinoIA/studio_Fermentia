@@ -32,6 +32,46 @@ const AI_LOGS: Array<{
   usage?: any;
 }> = [];
 
+// Sistema prompt minimalista: sin filtros, solo identidad y estilo
+const FERMENTIA_SYSTEM_PROMPT = `Te llamas FermentIA 🍇.
+
+Responde siempre en español con markdown limpio y agradable:
+- Encabezados claros (##, ###)
+- Viñetas separadas y concisas
+- Tablas solo cuando aporten claridad (Nombre | Ubicación | Variedad | Temp | Humedad | Plagas)
+- Evita pegar URLs crudas o imágenes en el texto a menos que te las pidan
+- Tono profesional, cercano y visual con emojis agrícolas (🍇🍷🌿🌱🌞🌧️🦗🍂)
+
+Cuando el usuario pida datos o cambios sobre viñedos, usa herramientas (function calls) para leer/contar/crear/actualizar/eliminar en lugar de suponer.`;
+
+// Embellece el markdown: quita URLs crudas y arregla saltos de línea/viñetas
+function beautifyMarkdown(text: string): string {
+  if (!text) return text;
+  let t = text.trim();
+  // Eliminar URLs crudas entre paréntesis: (http...)
+  t = t.replace(/\s*\(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+\)/g, '');
+  // Si quedó sintaxis de imagen sin URL, convertir a texto en negrita
+  t = t.replace(/!\[([^\]]+)\]/g, '**$1**');
+  // Asegurar saltos antes de encabezados
+  t = t.replace(/\s*(###[^\n]*)/g, '\n\n$1');
+  t = t.replace(/\s*(##\s[^\n]*)/g, '\n\n$1');
+  // Corregir casos como "# ## Resumen" -> "## Resumen"
+  t = t.replace(/#\s+##/g, '##');
+  // Asegurar que las viñetas empiecen en nueva línea
+  t = t.replace(/\s-\s/g, '\n- ');
+  // Separar pares campo: valor que vienen pegados por guiones
+  t = t.replace(/\s-\s\*\*/g, '\n- **');
+  // Asegurar línea en blanco antes de tablas que comienzan con |
+  t = t.replace(/([^\n])\n\|/g, '$1\n\n|');
+  // Asegurar línea en blanco entre encabezado y texto previo con dos puntos
+  t = t.replace(/:\s*\n\|/g, ':\n\n|');
+  // Compactar líneas en blanco múltiples
+  t = t.replace(/\n{3,}/g, '\n\n');
+  return t;
+}
+
+// Eliminado el filtro/rewriting: FermentIA responderá siempre con su rol.
+
 export async function getAILogs(sessionId?: string) {
   if (sessionId) {
     return AI_LOGS.filter(log => log.sessionId === sessionId);
@@ -54,45 +94,21 @@ export async function getAllChatSessions(): Promise<ChatSession[]> {
   return Array.from(CHAT_SESSIONS.values());
 }
 
-// Función principal de chat con OpenAI
+// Función principal de chat con OpenAI (con streaming)
 export async function chatWithOpenAI(input: OpenAIChatInput): Promise<OpenAIChatOutput> {
   const sessionId = input.sessionId || Date.now().toString();
   
   try {
-    // Verificar que OpenAI esté configurado
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('API key de OpenAI no configurada');
-    }
+    console.log('🍇 FermentIA - Iniciando chat...');
+    console.log('📝 Mensaje:', input.message);
 
-    // Construir mensajes para OpenAI
-    const messages: any[] = [
+  // No hay filtro: usamos el mensaje original
+
+    // Construir mensajes para OpenAI con FermentIA especializada
+  const messages: any[] = [
       {
         role: 'system',
-        content: `Eres Fermentia, un asistente de IA experto en viticultura y gestión de viñedos.
-
-CAPACIDADES PRINCIPALES:
-1. **Análisis de Datos**: Puedes analizar datos de viñedos, condiciones IoT, predicciones de cosecha y generar insights inteligentes.
-2. **Operaciones CRUD**: Puedes crear, leer, actualizar y eliminar registros de viñedos previa confirmación del usuario.
-3. **Recomendaciones Inteligentes**: Generas sugerencias basadas en patrones, historial y contexto actual.
-4. **Asistencia Contextual**: Proporcionas ayuda personalizada según los datos que maneja la aplicación.
-
-HERRAMIENTAS DISPONIBLES:
-- getVineyardInfo: Consultar información de viñedos
-- createVineyard: Crear nuevos viñedos (requiere confirmación)
-- updateVineyard: Actualizar viñedos existentes (requiere confirmación)  
-- deleteVineyard: Eliminar viñedos (requiere confirmación)
-- getHarvestPredictions: Obtener predicciones de cosecha con ML
-- analyzeDataAndRecommend: Generar recomendaciones inteligentes
-
-INSTRUCCIONES:
-- Responde siempre en español
-- Sé específico y técnicamente preciso
-- Cuando uses herramientas, explica qué estás haciendo
-- Si necesitas confirmación para operaciones destructivas, pídela claramente
-- Proporciona insights valiosos basados en los datos disponibles
-- Mantén un tono profesional pero amigable
-
-CONTEXTO ACTUAL: Es agosto de 2025, temporada de cosecha en el hemisferio sur.`
+        content: FERMENTIA_SYSTEM_PROMPT
       }
     ];
 
@@ -113,30 +129,34 @@ CONTEXTO ACTUAL: Es agosto de 2025, temporada de cosecha en el hemisferio sur.`
     // Convertir OPENAI_TOOLS a array mutable
     const tools = [...OPENAI_TOOLS];
 
-    // Llamar a OpenAI con function calling
+    // Llamar a OpenAI con configuración mejorada
+    console.log('🚀 Llamando a OpenAI...');
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // Modelo más rápido y económico
       messages,
       tools,
       tool_choice: "auto",
-      temperature: 0.7,
-      max_tokens: 1500,
-      presence_penalty: 0.1,
-      frequency_penalty: 0.1
+      temperature: 0.7, // Creatividad moderada
+      max_tokens: 2000, // Más tokens para respuestas completas
+      presence_penalty: 0.1, // Evitar repetición
+      frequency_penalty: 0.1,
+      top_p: 0.9, // Calidad de respuesta
+      stream: false // Sin streaming por ahora, para simplicidad
     });
 
+    console.log('✅ Respuesta recibida de OpenAI');
     const assistantMessage = completion.choices[0]?.message;
     
     if (!assistantMessage) {
-      throw new Error('No se recibió respuesta de OpenAI');
+      throw new Error('No se recibió respuesta válida de OpenAI');
     }
 
-    let responseText = assistantMessage.content || '';
+  let responseText = assistantMessage.content || '';
     const actions: AIAction[] = [];
     let totalConfidence = 1.0;
 
     // Procesar tool calls si existen
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+  if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       const toolResults: string[] = [];
       
       for (const toolCall of assistantMessage.tool_calls) {
@@ -197,6 +217,12 @@ CONTEXTO ACTUAL: Es agosto de 2025, temporada de cosecha en el hemisferio sur.`
       }
     }
 
+    // Embellecer salida
+    responseText = beautifyMarkdown(responseText);
+    if (responseText && !responseText.includes('# ') && !responseText.includes('## ')) {
+      responseText = `## 🍇 FermentIA\n\n${responseText}\n\n---\n> Consejo: puedo crear, actualizar, eliminar o contar viñedos cuando lo necesites.`;
+    }
+
     // Guardar en logs
     AI_LOGS.push({
       timestamp: Date.now(),
@@ -217,10 +243,30 @@ CONTEXTO ACTUAL: Es agosto de 2025, temporada de cosecha en el hemisferio sur.`
     };
 
   } catch (error) {
-    console.error('Error en OpenAI chat:', error);
+    console.error('❌ Error en FermentIA chat:', error);
+    
+    // Manejo específico de errores de API key
+    if (error instanceof Error) {
+      if (error.message.includes('401') || error.message.includes('API key')) {
+        console.error('❌ Error de API key - Verificar configuración');
+        return {
+          text: '❌ **Error de Configuración**\n\nHay un problema con la configuración de la API key de OpenAI. Por favor, verifica que esté correctamente configurada.',
+          sessionId,
+          confidence: 0
+        };
+      }
+      
+      if (error.message.includes('quota') || error.message.includes('limit')) {
+        return {
+          text: '⚠️ **Límite de Uso Excedido**\n\nSe ha alcanzado el límite de uso de la API. Por favor, inténtalo más tarde.',
+          sessionId,
+          confidence: 0
+        };
+      }
+    }
     
     return {
-      text: 'Lo siento, ocurrió un error al procesar tu solicitud. Por favor, inténtalo de nuevo.',
+      text: '🍇 **FermentIA - Error Temporal**\n\nLo siento, ocurrió un error al procesar tu solicitud. Por favor, inténtalo de nuevo en unos momentos.\n\n*Si el problema persiste, verifica la configuración de la API.*',
       sessionId,
       confidence: 0
     };

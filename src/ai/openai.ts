@@ -1,19 +1,19 @@
 // src/ai/openai.ts
 import OpenAI from 'openai';
 
-// Validación de la API key con mejor manejo de errores
-const apiKey = process.env.OPENAI_API_KEY;
-
-if (!apiKey) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('OPENAI_API_KEY es requerida en producción');
-  } else {
+// Función para obtener la API key en runtime
+function getAPIKey() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
     console.warn('⚠️ OPENAI_API_KEY no está configurada. Las funciones de IA no funcionarán.');
+    throw new Error('API key de OpenAI no configurada');
   }
+  return apiKey;
 }
 
+// Crear instancia de OpenAI
 export const openai = new OpenAI({
-  apiKey: apiKey || 'dummy-key-for-development',
+  apiKey: process.env.OPENAI_API_KEY || '', // Usar directamente la variable de entorno
   timeout: 30000, // 30 segundos timeout
   maxRetries: 3, // Reintentos en caso de error
 });
@@ -22,7 +22,8 @@ export const openai = new OpenAI({
 export async function generateVineyardRecommendations(vineyardData: any, context?: string) {
   try {
     // Verificar que tenemos una API key válida
-    if (!apiKey || apiKey === 'dummy-key-for-development') {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
       throw new Error('API key de OpenAI no configurada');
     }
 

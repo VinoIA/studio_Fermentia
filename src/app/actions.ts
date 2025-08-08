@@ -35,13 +35,7 @@ export async function chatWithFermentia(
   });
   
   try {
-    // Verificar que la API key esté configurada
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY no está configurada");
-      throw new Error("API key de OpenAI no configurada");
-    }
-    
-    console.log("Llamando a OpenAI con mensaje:", message);
+    console.log("🍇 FermentIA - Procesando mensaje:", message);
     
     const output = await chatWithOpenAI({
       history: validatedInput.history,
@@ -49,7 +43,7 @@ export async function chatWithFermentia(
       sessionId: validatedInput.sessionId
     });
     
-    console.log("Respuesta de OpenAI:", output);
+    console.log("✅ FermentIA - Respuesta generada:", output.text.substring(0, 100) + "...");
     
     return { 
       text: output.text,
@@ -59,7 +53,7 @@ export async function chatWithFermentia(
       usage: output.usage
     };
   } catch (error) {
-    console.error("Error detallado al chatear con OpenAI:", error);
+    console.error("❌ Error en FermentIA:", error);
     console.error("Stack trace:", error instanceof Error ? error.stack : 'No stack available');
     
     // Proporcionar un error más específico
@@ -75,7 +69,7 @@ export async function chatWithFermentia(
       }
     }
     
-    throw new Error(`Error al conectar con Fermentia: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    throw new Error(`Error al conectar con FermentIA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
   }
 }
 
