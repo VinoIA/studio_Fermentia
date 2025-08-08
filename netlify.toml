@@ -1,8 +1,25 @@
-[build]
-  command = "npm ci --include=dev --legacy-peer-deps && npm run build"
-  publish = ".next"
+[images]
+remote_images = [
+  "^(?:https:\\/\\/placehold\\.co(?:\\/(?!\\.)(?:(?:(?!(?:^|\\/)\\.).)*?)|$))$"
+]
 
-[build.environment]
+[functions]
+
+  [functions."*"]
+  included_files = [
+    "src/**",
+    "public/**",
+    ".env",
+    ".env.production",
+    ".env.local",
+    ".env.production.local"
+  ]
+
+[build]
+command = "npm ci --include=dev --legacy-peer-deps && npm run build"
+publish = ".next"
+
+  [build.environment]
   NODE_VERSION = "20"
   NPM_VERSION = "10"
   NEXT_TELEMETRY_DISABLED = "1"
@@ -13,35 +30,172 @@
   NODE_OPTIONS = "--max-old-space-size=4096"
 
 [[plugins]]
-  package = "@netlify/plugin-nextjs"
-
-[functions]
-  node_bundler = "esbuild"
-  included_files = ["src/**", "public/**", ".next/**"]
-  timeout = 30
-
-[context.production.environment]
-  NODE_ENV = "production"
-  NEXT_TELEMETRY_DISABLED = "1"
-
-[context.deploy-preview.environment]
-  NODE_ENV = "production"
-  NEXT_TELEMETRY_DISABLED = "1"
+package = "@netlify/plugin-nextjs"
 
 [[headers]]
-  for = "/*"
+for = "/*"
+
   [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    X-Robots-Tag = "index, follow"
-    
-[[headers]]
-  for = "/_next/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+  X-Frame-Options = "DENY"
+  X-XSS-Protection = "1; mode=block"
+  X-Content-Type-Options = "nosniff"
+  X-Robots-Tag = "index, follow"
+  Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/api/*"
+for = "/api/*"
+
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
+  Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+for = "/_next/static/*"
+
+  [headers.values]
+  Cache-Control = "public, max-age=31536000, immutable"
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/:splat"
+status = 200
+
+[[redirects]]
+from = "/favicon.ico"
+to = "/favicon.ico"
+status = 200
+
+[[redirects]]
+from = "/imgs/*"
+to = "/imgs/:splat"
+status = 200
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+
+[[redirects]]
+from = "/_next/image"
+to = "/.netlify/images?url=:url&w=:width&q=:quality"
+status = 200
+
+  [redirects.query]
+  url = ":url"
+  w = ":width"
+  q = ":quality"
+
+[[redirects]]
+from = "/_ipx/*"
+to = "/.netlify/images?url=:url&w=:width&q=:quality"
+status = 200
+
+  [redirects.query]
+  url = ":url"
+  w = ":width"
+  q = ":quality"
+
+[context]
+
+  [context.production]
+
+    [context.production.environment]
+    NODE_ENV = "production"
+    NEXT_TELEMETRY_DISABLED = "1"
+
+    [context.production.images]
+    remote_images = [
+      "^(?:https:\\/\\/placehold\\.co(?:\\/(?!\\.)(?:(?:(?!(?:^|\\/)\\.).)*?)|$))$"
+    ]
+
+    [context.production.functions]
+
+      [context.production.functions."*"]
+      included_files = [
+        "src/**",
+        "public/**",
+        ".env",
+        ".env.production",
+        ".env.local",
+        ".env.production.local"
+      ]
+
+    [[context.production.headers]]
+    for = "/*"
+
+      [context.production.headers.values]
+      X-Frame-Options = "DENY"
+      X-XSS-Protection = "1; mode=block"
+      X-Content-Type-Options = "nosniff"
+      X-Robots-Tag = "index, follow"
+      Cache-Control = "public, max-age=31536000, immutable"
+
+    [[context.production.headers]]
+    for = "/_next/static/*"
+
+      [context.production.headers.values]
+      Cache-Control = "public, max-age=31536000, immutable"
+
+    [[context.production.headers]]
+    for = "/api/*"
+
+      [context.production.headers.values]
+      Cache-Control = "no-cache, no-store, must-revalidate"
+
+    [[context.production.headers]]
+    for = "/_next/static/*"
+
+      [context.production.headers.values]
+      Cache-Control = "public, max-age=31536000, immutable"
+
+  [context.deploy-preview]
+
+    [context.deploy-preview.environment]
+    NODE_ENV = "production"
+    NEXT_TELEMETRY_DISABLED = "1"
+
+  [context.master]
+
+    [context.master.images]
+    remote_images = [
+      "^(?:https:\\/\\/placehold\\.co(?:\\/(?!\\.)(?:(?:(?!(?:^|\\/)\\.).)*?)|$))$"
+    ]
+
+    [context.master.functions]
+
+      [context.master.functions."*"]
+      included_files = [
+        "src/**",
+        "public/**",
+        ".env",
+        ".env.production",
+        ".env.local",
+        ".env.production.local"
+      ]
+
+    [[context.master.headers]]
+    for = "/*"
+
+      [context.master.headers.values]
+      X-Frame-Options = "DENY"
+      X-XSS-Protection = "1; mode=block"
+      X-Content-Type-Options = "nosniff"
+      X-Robots-Tag = "index, follow"
+      Cache-Control = "public, max-age=31536000, immutable"
+
+    [[context.master.headers]]
+    for = "/_next/static/*"
+
+      [context.master.headers.values]
+      Cache-Control = "public, max-age=31536000, immutable"
+
+    [[context.master.headers]]
+    for = "/api/*"
+
+      [context.master.headers.values]
+      Cache-Control = "no-cache, no-store, must-revalidate"
+
+    [[context.master.headers]]
+    for = "/_next/static/*"
+
+      [context.master.headers.values]
+      Cache-Control = "public, max-age=31536000, immutable"
