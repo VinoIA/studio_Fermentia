@@ -24,10 +24,15 @@ import {
   CheckCircle,
   Clock,
   Upload,
-  Lightbulb
+  Lightbulb,
+  Plus,
+  Trash2,
+  MessageSquare,
+  Sparkles,
+  Download
 } from 'lucide-react';
 import { chatWithFermentia } from '@/app/actions';
-import type { Message, AIAction, TemperamentType } from '@/types';
+import type { Message, AIAction, TemperamentType, ChatSession } from '@/types';
 
 interface AIChatModalProps {
   trigger?: React.ReactNode;
@@ -56,12 +61,136 @@ export function AIChatModal({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [temperament, setTemperament] = useState<TemperamentType>('amigable');
-  const [sessionId] = useState(() => `session_${Date.now()}`);
+  const [sessionId, setSessionId] = useState(() => `session_${Date.now()}`);
   const [actions, setActions] = useState<AIAction[]>([]);
   const [confidence, setConfidence] = useState<number | null>(null);
   
+  // Nuevos estados para conversaciones
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [sessionTitle, setSessionTitle] = useState('');
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Cargar sesiones guardadas al montar
+  useEffect(() => {
+    if (persistSession) {
+      const savedSessions = localStorage.getItem('fermentia_chat_sessions');
+      if (savedSessions) {
+        try {
+          const sessions: ChatSession[] = JSON.parse(savedSessions);
+          setChatSessions(sessions);
+          
+          // Si hay sesiones, cargar la más reciente
+          if (sessions.length > 0) {
+            const lastSession = sessions[sessions.length - 1];
+            setCurrentSessionId(lastSession.id);
+            setMessages(lastSession.messages);
+            setTemperament(lastSession.temperament as TemperamentType);
+            setSessionTitle(lastSession.title);
+          }
+        } catch (error) {
+          console.warn('Error al cargar sesiones guardadas:', error);
+        }
+      }
+    }
+  }, [persistSession]);
+
+  // Función para crear nueva conversación
+  const createNewSession = () => {
+    const newSessionId = `session_${Date.now()}`;
+    const newSession: ChatSession = {
+      id: newSessionId,
+      title: `Conversación ${chatSessions.length + 1}`,
+      messages: [],
+      temperament,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    setChatSessions(prev => [...prev, newSession]);
+    setCurrentSessionId(newSessionId);
+    setMessages([]);
+    setSessionTitle(newSession.title);
+    
+    // Agregar mensaje de bienvenida
+    if (initialMessage) {
+      const welcomeMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: initialMessage,
+        timestamp: Date.now(),
+        metadata: {
+          temperament: 'amigable',
+          confidence: 1.0
+        }
+      };
+      setMessages([welcomeMessage]);
+    }
+  };
+
+  // Función para cambiar a una sesión específica
+  const switchToSession = (sessionId: string) => {
+    const session = chatSessions.find(s => s.id === sessionId);
+    if (session) {
+      setCurrentSessionId(sessionId);
+      setMessages(session.messages);
+      setTemperament(session.temperament as TemperamentType);
+      setSessionTitle(session.title);
+    }
+  };
+
+  // Función para eliminar sesión
+  const deleteSession = (sessionId: string) => {
+    const updatedSessions = chatSessions.filter(s => s.id !== sessionId);
+    setChatSessions(updatedSessions);
+    
+    if (currentSessionId === sessionId) {
+      if (updatedSessions.length > 0) {
+        switchToSession(updatedSessions[updatedSessions.length - 1].id);
+      } else {
+        createNewSession();
+      }
+    }
+    
+    // Actualizar localStorage
+    localStorage.setItem('fermentia_chat_sessions', JSON.stringify(updatedSessions));
+  };
+
+  // Función para guardar sesión actual
+  const saveCurrentSession = () => {
+    if (!currentSessionId || messages.length === 0) return;
+    
+    const updatedSessions = chatSessions.map(session => 
+      session.id === currentSessionId 
+        ? { 
+            ...session, 
+            messages, 
+            temperament,
+            title: sessionTitle || session.title,
+            updatedAt: Date.now() 
+          }
+        : session
+    );
+    
+    setChatSessions(updatedSessions);
+    localStorage.setItem('fermentia_chat_sessions', JSON.stringify(updatedSessions));
+  };
+
+  // Guardar automáticamente cuando cambien los mensajes
+  useEffect(() => {
+    if (persistSession && currentSessionId && messages.length > 0) {
+      saveCurrentSession();
+    }
+  }, [messages, persistSession, currentSessionId]);
+
+  // Inicializar primera sesión si no hay ninguna
+  useEffect(() => {
+    if (persistSession && isOpen && chatSessions.length === 0) {
+      createNewSession();
+    }
+  }, [persistSession, isOpen]);
 
   // Persistir mensajes en localStorage si persistSession está activado
   useEffect(() => {
@@ -200,33 +329,88 @@ export function AIChatModal({
     setInput(action);
   };
 
-  const clearChat = () => {
-    setMessages([]);
-    setActions([]);
-    setConfidence(null);
-    if (persistSession) {
-      localStorage.removeItem(`fermentia_chat_${sessionId}`);
-    }
+  // Función para generar más sugerencias
+  const generateMoreSuggestions = async () => {
+    if (isLoading) return;
     
-    // Si hay mensaje inicial, agregarlo de nuevo
-    if (initialMessage) {
-      const welcomeMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: initialMessage,
+    setIsLoading(true);
+    
+    const suggestionPrompts = [
+      "Dame 3 consejos específicos para mejorar la calidad de mis uvas",
+      "¿Qué recomendaciones tienes para optimizar el riego en esta época?",
+      "Sugiere estrategias preventivas contra plagas comunes",
+      "¿Cómo puedo mejorar el rendimiento de mis viñedos?",
+      "Dame consejos para la próxima cosecha"
+    ];
+    
+    const randomPrompt = suggestionPrompts[Math.floor(Math.random() * suggestionPrompts.length)];
+    
+    try {
+      const response = await chatWithFermentia(
+        messages, 
+        randomPrompt, 
+        currentSessionId || `session_${Date.now()}`
+      );
+      
+      const suggestionMessage: Message = { 
+        id: Date.now().toString(), 
+        role: 'assistant', 
+        content: `🌟 **Aquí tienes algunas sugerencias adicionales:**\n\n${response.text}`,
         timestamp: Date.now(),
         metadata: {
-          temperament: 'amigable',
-          confidence: 1.0
+          confidence: response.confidence,
+          temperament: temperament
         }
       };
-      setMessages([welcomeMessage]);
+      
+      setMessages(prev => [...prev, suggestionMessage]);
+      setActions(prev => [...prev, ...(response.actions || [])]);
+      setConfidence(response.confidence || null);
+
+    } catch (error) {
+       console.error('Error generating suggestions:', error);
+       const errorMessage: Message = { 
+         id: Date.now().toString(), 
+         role: 'assistant', 
+         content: "No pude generar sugerencias en este momento. ¿Hay algo específico en lo que te gustaría que te ayude?",
+         timestamp: Date.now()
+       };
+       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const clearChat = () => {
+    const initialMessage = messages.find(m => m.role === 'assistant')?.content || 
+      "Hola, soy **Fermentia**, tu asistente especializado en viticultura. Estoy aquí para ayudarte con todas tus necesidades relacionadas con el cuidado de viñedos y la producción de vino. ¿En qué puedo asistirte hoy?";
+    
+    if (currentSessionId) {
+      saveCurrentSession();
+    }
+    
+    // Crear nueva sesión
+    const newSessionId = `session_${Date.now()}`;
+    setCurrentSessionId(newSessionId);
+    
+    const welcomeMessage: Message = {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: initialMessage,
+      timestamp: Date.now(),
+      metadata: {
+        temperament: 'amigable',
+        confidence: 1.0
+      }
+    };
+    setMessages([welcomeMessage]);
+    setActions([]);
+    setConfidence(null);
   };
 
   const exportChat = () => {
     const chatData = {
-      sessionId,
+      sessionId: currentSessionId,
       messages,
       actions,
       exportedAt: new Date().toISOString()
@@ -236,7 +420,7 @@ export function AIChatModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fermentia_chat_${sessionId}.json`;
+    a.download = `fermentia_chat_${currentSessionId || 'session'}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -405,6 +589,38 @@ export function AIChatModal({
                 </Button>
               </div>
 
+              {/* Botones de gestión de conversación */}
+              <div className="grid grid-cols-3 gap-2 border-t pt-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={clearChat}
+                  className="text-green-600 border-green-200 hover:bg-green-50"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Nueva Conversación
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={generateMoreSuggestions}
+                  disabled={isLoading}
+                  className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                >
+                  <Brain className="h-4 w-4 mr-1" />
+                  {isLoading ? 'Generando...' : 'Más Sugerencias'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={exportChat}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Exportar Chat
+                </Button>
+              </div>
+
               {/* Formulario de entrada */}
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <div className="flex-1 flex gap-2">
@@ -486,19 +702,84 @@ export function AIChatModal({
           <TabsContent value="history" className="flex-1">
             <ScrollArea className="h-[500px]">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Historial de Conversaciones</h3>
-                <p className="text-muted-foreground">
-                  Sesión actual: {sessionId}
-                </p>
-                {confidence && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">Confianza promedio:</span>
-                    <Badge variant="outline">
-                      {(confidence * 100).toFixed(1)}%
-                    </Badge>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Conversaciones Guardadas</h3>
+                  <Badge variant="outline">
+                    {chatSessions.length} sesiones
+                  </Badge>
+                </div>
+                
+                {currentSessionId && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-green-800">Sesión Actual</p>
+                        <p className="text-sm text-green-600">ID: {currentSessionId}</p>
+                        <p className="text-sm text-green-600">{messages.length} mensajes</p>
+                      </div>
+                      {confidence && (
+                        <Badge variant="outline" className="bg-white">
+                          {(confidence * 100).toFixed(1)}% confianza
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 )}
-                {/* Aquí podrías mostrar sesiones anteriores */}
+
+                {chatSessions.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No hay conversaciones guardadas aún</p>
+                    <p className="text-sm">Las conversaciones se guardan automáticamente</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {chatSessions.map((session) => (
+                      <Card key={session.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4" />
+                                <span className="font-medium">
+                                  {session.title || `Sesión ${session.id.split('_')[1]}`}
+                                </span>
+                                {session.id === currentSessionId && (
+                                  <Badge variant="outline" className="text-xs">Actual</Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-1">
+                                {session.messages.length} mensajes
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(session.createdAt).toLocaleDateString()} a las{' '}
+                                {new Date(session.createdAt).toLocaleTimeString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => switchToSession(session.id)}
+                                disabled={session.id === currentSessionId}
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deleteSession(session.id)}
+                                className="text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
