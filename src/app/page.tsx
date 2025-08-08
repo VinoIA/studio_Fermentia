@@ -15,9 +15,10 @@ import {
   Grape,
   CircleUser,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// Importaciones específicas para evitar conflictos de resolución
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,12 +26,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "../components/ui/dropdown-menu"
 import type { Vineyard, Message, HarvestPrediction } from "@/types";
-import { AIChatModal } from "@/components/ui/ai-chat-modal";
-import { AIRecommendations } from "@/components/ui/ai-recommendations";
-import { VineyardCRUDModal } from "@/components/ui/vineyard-crud-modal";
-import { Badge } from "@/components/ui/badge";
+import { AIChatModal } from "../components/ui/ai-chat-modal";
+import { AIRecommendations } from "../components/ui/ai-recommendations";
+import { VineyardCRUDModal } from "../components/ui/vineyard-crud-modal";
+import { Badge } from "../components/ui/badge";
 import { getVineyards, getHarvestPrediction } from "@/lib/data";
 
 const VineyardCard: React.FC<{ vineyard: Vineyard; prediction: HarvestPrediction | null; onEdit: () => void; onView: () => void }> = ({ vineyard, prediction, onEdit, onView }) => (

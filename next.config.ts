@@ -1,4 +1,5 @@
 import type {NextConfig} from 'next';
+import path from 'path';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -6,6 +7,21 @@ const nextConfig: NextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  experimental: {
+    typedRoutes: false,
+  },
+  webpack: (config, { isServer }) => {
+    // Mejorar la resolución de módulos
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, './src'),
+    };
+    
+    // Asegurar que las extensiones estén bien configuradas
+    config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
+    
+    return config;
   },
   images: {
     remotePatterns: [
