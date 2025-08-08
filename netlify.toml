@@ -7,35 +7,27 @@
   NPM_VERSION = "10"
   NEXT_TELEMETRY_DISABLED = "1"
   NPM_FLAGS = "--legacy-peer-deps"
-  # Force compatibility with Next.js 15
   NETLIFY_NEXT_PLUGIN_SKIP = "false"
   NPM_CONFIG_FUND = "false"
   NPM_CONFIG_AUDIT = "false"
   NODE_OPTIONS = "--max-old-space-size=4096"
-  # Important: ensure URL is available in build context
-  NETLIFY_URL = "$DEPLOY_PRIME_URL"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Ensure serverless functions can find our API routes
 [functions]
   node_bundler = "esbuild"
   included_files = ["src/**", "public/**", ".next/**"]
-  # Increase timeout for external API calls
   timeout = 30
 
-# Environment variables for production
 [context.production.environment]
   NODE_ENV = "production"
   NEXT_TELEMETRY_DISABLED = "1"
 
-# Environment variables for preview builds
 [context.deploy-preview.environment]
   NODE_ENV = "production"
   NEXT_TELEMETRY_DISABLED = "1"
 
-# Headers for security and performance
 [[headers]]
   for = "/*"
   [headers.values]
@@ -43,7 +35,6 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     X-Robots-Tag = "index, follow"
-    Cache-Control = "public, max-age=31536000, immutable"
     
 [[headers]]
   for = "/_next/static/*"
