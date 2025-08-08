@@ -31,20 +31,71 @@ import type { Message, AIAction, TemperamentType } from '@/types';
 
 interface AIChatModalProps {
   trigger?: React.ReactNode;
+  isOpen?: boolean;
+  onClose?: () => void;
+  initialMessage?: string;
+  persistSession?: boolean;
+  onVineyardAction?: () => void;
 }
 
-export function AIChatModal({ trigger }: AIChatModalProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function AIChatModal({ 
+  trigger, 
+  isOpen: externalIsOpen, 
+  onClose: externalOnClose,
+  initialMessage,
+  persistSession = false,
+  onVineyardAction
+}: AIChatModalProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const setIsOpen = externalOnClose ? 
+    (open: boolean) => { if (!open) externalOnClose(); } : 
+    setInternalIsOpen;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [temperament, setTemperament] = useState<TemperamentType>('amigable');
-  const [sessionId] = useState(() => Date.now().toString());
+  const [sessionId] = useState(() => `session_${Date.now()}`);
   const [actions, setActions] = useState<AIAction[]>([]);
   const [confidence, setConfidence] = useState<number | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persistir mensajes en localStorage si persistSession está activado
+  useEffect(() => {
+    if (persistSession && isOpen) {
+      const savedMessages = localStorage.getItem(`fermentia_chat_${sessionId}`);
+      if (savedMessages) {
+        try {
+          setMessages(JSON.parse(savedMessages));
+        } catch (error) {
+          console.warn('Error al cargar mensajes guardados:', error);
+        }
+      } else if (initialMessage) {
+        // Agregar mensaje inicial de Fermentia
+        const welcomeMessage: Message = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: initialMessage,
+          timestamp: Date.now(),
+          metadata: {
+            temperament: 'amigable',
+            confidence: 1.0
+          }
+        };
+        setMessages([welcomeMessage]);
+      }
+    }
+  }, [persistSession, isOpen, sessionId, initialMessage]);
+
+  // Guardar mensajes cuando cambien
+  useEffect(() => {
+    if (persistSession && messages.length > 0) {
+      localStorage.setItem(`fermentia_chat_${sessionId}`, JSON.stringify(messages));
+    }
+  }, [messages, persistSession, sessionId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,7 +125,6 @@ export function AIChatModal({ trigger }: AIChatModalProps) {
       const response = await chatWithFermentia(
         newMessages, 
         userMessage.content, 
-        temperament,
         sessionId
       );
       
@@ -84,14 +134,54 @@ export function AIChatModal({ trigger }: AIChatModalProps) {
         content: response.text,
         timestamp: Date.now(),
         metadata: {
-          temperament: response.temperament,
           confidence: response.confidence,
+          executedAction: response.actions?.[0]?.id,
+          temperament: temperament
         }
       };
       
       setMessages(prev => [...prev, assistantMessage]);
       setActions(prev => [...prev, ...(response.actions || [])]);
       setConfidence(response.confidence || null);
+
+      // Detectar acciones de viñedos y notificar
+      const vineyardActions = response.actions?.filter(action => 
+        action.entity === 'vineyard' && 
+        ['CREATE', 'UPDATE', 'DELETE'].includes(action.type) &&
+        action.executed
+      );
+
+      if (vineyardActions && vineyardActions.length > 0) {
+        // Notificar sobre acciones ejecutadas
+        for (const action of vineyardActions) {
+          if (action.type === 'DELETE') {
+            // Mensaje especial para eliminaciones
+            const deleteNotification: Message = {
+              id: (Date.now() + 2).toString(),
+              role: 'assistant',
+              content: `✅ ¡Listo! ${action.description} He actualizado tu lista de viñedos. ¿Hay algo más en lo que pueda ayudarte?`,
+              timestamp: Date.now() + 1000,
+              metadata: {
+                temperament: 'amigable',
+                confidence: 1.0,
+                executedAction: action.id
+              }
+            };
+            
+            setTimeout(() => {
+              setMessages(prev => [...prev, deleteNotification]);
+            }, 1500);
+          }
+        }
+
+        // Notificar al componente padre para actualizar la lista
+        if (onVineyardAction) {
+          setTimeout(() => {
+            onVineyardAction();
+          }, 2000);
+        }
+      }
+
     } catch (error) {
        console.error(error);
        const errorMessage: Message = { 
@@ -108,6 +198,49 @@ export function AIChatModal({ trigger }: AIChatModalProps) {
 
   const handleQuickAction = (action: string) => {
     setInput(action);
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setActions([]);
+    setConfidence(null);
+    if (persistSession) {
+      localStorage.removeItem(`fermentia_chat_${sessionId}`);
+    }
+    
+    // Si hay mensaje inicial, agregarlo de nuevo
+    if (initialMessage) {
+      const welcomeMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: initialMessage,
+        timestamp: Date.now(),
+        metadata: {
+          temperament: 'amigable',
+          confidence: 1.0
+        }
+      };
+      setMessages([welcomeMessage]);
+    }
+  };
+
+  const exportChat = () => {
+    const chatData = {
+      sessionId,
+      messages,
+      actions,
+      exportedAt: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(chatData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fermentia_chat_${sessionId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {

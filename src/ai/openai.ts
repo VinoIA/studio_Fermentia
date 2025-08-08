@@ -1,13 +1,124 @@
 // src/ai/openai.ts
 import OpenAI from 'openai';
 
-if (!process.env.OPENAI_API_KEY) {
-  console.error('OPENAI_API_KEY no está configurada en las variables de entorno');
+// Validación de la API key con mejor manejo de errores
+const apiKey = process.env.OPENAI_API_KEY;
+
+if (!apiKey) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('OPENAI_API_KEY es requerida en producción');
+  } else {
+    console.warn('⚠️ OPENAI_API_KEY no está configurada. Las funciones de IA no funcionarán.');
+  }
 }
 
 export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: apiKey || 'dummy-key-for-development',
+  timeout: 30000, // 30 segundos timeout
+  maxRetries: 3, // Reintentos en caso de error
 });
+
+// Función para generar recomendaciones inteligentes usando GPT-4
+export async function generateVineyardRecommendations(vineyardData: any, context?: string) {
+  try {
+    // Verificar que tenemos una API key válida
+    if (!apiKey || apiKey === 'dummy-key-for-development') {
+      throw new Error('API key de OpenAI no configurada');
+    }
+
+    const systemPrompt = `Eres un experto agrónomo especializado en viticultura. 
+Tu trabajo es analizar datos de viñedos y generar recomendaciones precisas y actionables.
+Responde SIEMPRE en formato JSON con la siguiente estructura:
+{
+  "recommendations": [
+    {
+      "id": "unique_id",
+      "type": "warning|suggestion|insight|optimization",
+      "title": "Título de la recomendación",
+      "description": "Descripción detallada",
+      "priority": "critical|high|medium|low",
+      "confidence": 0.0-1.0,
+      "data": {
+        "actions": ["acción1", "acción2"],
+        "benefits": ["beneficio1", "beneficio2"]
+      }
+    }
+  ],
+  "summary": "Resumen general del análisis"
+}`;
+
+    const userPrompt = `Analiza los siguientes datos de viñedos y genera recomendaciones específicas:
+
+DATOS DE VIÑEDOS:
+${JSON.stringify(vineyardData, null, 2)}
+
+CONTEXTO ADICIONAL:
+${context || 'Análisis general de viñedos'}
+
+INSTRUCCIONES:
+- Genera máximo 3 recomendaciones
+- Prioriza problemas críticos (plagas, enfermedades)
+- Considera la época del año (actualmente es agosto, temporada de cosecha)
+- Sé específico en las acciones recomendadas
+- Incluye nivel de confianza basado en la calidad de los datos`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Modelo más económico y eficiente
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: userPrompt
+        }
+      ],
+      temperature: 0.3, // Baja temperatura para respuestas más precisas
+      max_tokens: 1500,
+      response_format: { type: "json_object" } // Forzar respuesta en JSON
+    });
+
+    const response = completion.choices[0]?.message?.content;
+    
+    if (!response) {
+      throw new Error('No se recibió respuesta de OpenAI');
+    }
+
+    const parsedResponse = JSON.parse(response);
+    
+    // Validar estructura de la respuesta
+    if (!parsedResponse.recommendations || !Array.isArray(parsedResponse.recommendations)) {
+      throw new Error('Formato de respuesta inválido de OpenAI');
+    }
+
+    // Agregar timestamps y IDs únicos
+    const recommendations = parsedResponse.recommendations.map((rec: any, index: number) => ({
+      ...rec,
+      id: `openai_${Date.now()}_${index}`,
+      timestamp: Date.now(),
+      source: 'openai_gpt4'
+    }));
+
+    return {
+      success: true,
+      recommendations,
+      summary: parsedResponse.summary || 'Análisis completado exitosamente',
+      usage: completion.usage
+    };
+
+  } catch (error) {
+    console.error('Error en OpenAI API:', error);
+    
+    // Fallback a recomendaciones básicas si OpenAI falla
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido en OpenAI',
+      recommendations: [],
+      fallback: true
+    };
+  }
+}
 
 // Configuraciones predefinidas para el temperamento de la IA
 export const AI_TEMPERAMENTS = {

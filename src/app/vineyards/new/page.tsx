@@ -21,7 +21,7 @@ function SubmitButton() {
 }
 
 export default function NewVineyardPage() {
-  const initialState = { message: null, errors: {} };
+  const initialState = { message: "", errors: {} };
   const [state, dispatch] = useFormState(addVineyard, initialState);
 
   return (

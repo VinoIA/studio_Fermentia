@@ -117,8 +117,7 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
       
       const response = await chatWithFermentia(
         [],
-        `${context} Dame 3-4 sugerencias breves y específicas para optimizar este viñedo considerando su ubicación, variedades y condiciones. Sé conciso y práctico.`,
-        'técnico'
+        `${context} Dame 3-4 sugerencias breves y específicas para optimizar este viñedo considerando su ubicación, variedades y condiciones. Sé conciso y práctico.`
       );
       
       setAiSuggestions(response.text);

@@ -1,14 +1,14 @@
 // src/ai/flows/openai-chat-flow.ts
 'use server';
 
-import { openai, AI_TEMPERAMENTS, type TemperamentType } from '@/ai/openai';
-import { executeAITool, OPENAI_TOOLS } from '@/ai/tools/crud-tools';
+import { openai } from '@/ai/openai';
+import { executeAITool } from '@/ai/tools/crud-tools';
+import { OPENAI_TOOLS } from '@/ai/tools/tool-definitions';
 import type { Message, AIAction, ChatSession } from '@/types';
 
 export interface OpenAIChatInput {
   history: Message[];
   message: string;
-  temperament?: TemperamentType;
   sessionId?: string;
 }
 
@@ -17,8 +17,8 @@ export interface OpenAIChatOutput {
   actions?: AIAction[];
   recommendations?: any[];
   confidence?: number;
-  temperament: TemperamentType;
   sessionId: string;
+  usage?: any;
 }
 
 // Sistema de logs para auditoría
@@ -27,9 +27,9 @@ const AI_LOGS: Array<{
   sessionId: string;
   input: string;
   output: string;
-  temperament: TemperamentType;
   actions: AIAction[];
   confidence?: number;
+  usage?: any;
 }> = [];
 
 export async function getAILogs(sessionId?: string) {
@@ -56,15 +56,19 @@ export async function getAllChatSessions(): Promise<ChatSession[]> {
 
 // Función principal de chat con OpenAI
 export async function chatWithOpenAI(input: OpenAIChatInput): Promise<OpenAIChatOutput> {
-  const temperament = input.temperament || 'amigable';
   const sessionId = input.sessionId || Date.now().toString();
-  const temperamentConfig = AI_TEMPERAMENTS[temperament];
   
-  // Construir mensajes para OpenAI
-  const messages: any[] = [
-    {
-      role: 'system',
-      content: `Eres Fermentia, un asistente de IA experto en viticultura y gestión de viñedos. Tu configuración actual es: ${temperamentConfig.description}.
+  try {
+    // Verificar que OpenAI esté configurado
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('API key de OpenAI no configurada');
+    }
+
+    // Construir mensajes para OpenAI
+    const messages: any[] = [
+      {
+        role: 'system',
+        content: `Eres Fermentia, un asistente de IA experto en viticultura y gestión de viñedos.
 
 CAPACIDADES PRINCIPALES:
 1. **Análisis de Datos**: Puedes analizar datos de viñedos, condiciones IoT, predicciones de cosecha y generar insights inteligentes.
@@ -78,223 +82,183 @@ HERRAMIENTAS DISPONIBLES:
 - updateVineyard: Actualizar viñedos existentes (requiere confirmación)  
 - deleteVineyard: Eliminar viñedos (requiere confirmación)
 - getHarvestPredictions: Obtener predicciones de cosecha con ML
-- analyzeDataAndRecommend: Analizar datos y generar recomendaciones
+- analyzeDataAndRecommend: Generar recomendaciones inteligentes
 
-REGLAS IMPORTANTES:
-- Siempre habla en español
-- Para operaciones CRUD que modifiquen datos, SIEMPRE solicita confirmación explícita del usuario
-- Proporciona contexto y justificaciones para tus recomendaciones
-- Cuando analices datos, incluye niveles de confianza en tus conclusiones
-- Si detectas problemas críticos (plagas, condiciones adversas), prioriza estas alertas
+INSTRUCCIONES:
+- Responde siempre en español
+- Sé específico y técnicamente preciso
+- Cuando uses herramientas, explica qué estás haciendo
+- Si necesitas confirmación para operaciones destructivas, pídela claramente
+- Proporciona insights valiosos basados en los datos disponibles
+- Mantén un tono profesional pero amigable
 
-TEMPERAMENTO ACTUAL: ${temperament} - ${temperamentConfig.description}`
-    }
-  ];
+CONTEXTO ACTUAL: Es agosto de 2025, temporada de cosecha en el hemisferio sur.`
+      }
+    ];
 
-  // Agregar historial de conversación
-  input.history.forEach(msg => {
-    messages.push({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content
-    });
-  });
-
-  // Agregar mensaje actual
-  messages.push({
-    role: 'user',
-    content: input.message
-  });
-
-  try {
-    // Llamada inicial a OpenAI
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages,
-      tools: [...OPENAI_TOOLS],
-      tool_choice: 'auto',
-      temperature: temperamentConfig.temperature,
-      top_p: temperamentConfig.top_p,
-      frequency_penalty: temperamentConfig.frequency_penalty,
-      presence_penalty: temperamentConfig.presence_penalty,
-      max_tokens: 2000
-    });
-
-    const response = completion.choices[0].message;
-    const actions: AIAction[] = [];
-    let finalContent = response.content || '';
-
-    // Ejecutar herramientas si fueron llamadas
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      // Agregar la respuesta del asistente con tool_calls al historial
+    // Agregar historial de conversación
+    input.history.forEach(msg => {
       messages.push({
-        role: 'assistant',
-        content: response.content,
-        tool_calls: response.tool_calls
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
       });
+    });
 
-      // Ejecutar cada herramienta y agregar sus respuestas
-      for (const toolCall of response.tool_calls) {
-        try {
-          const params = JSON.parse(toolCall.function.arguments);
-          const result = await executeAITool(toolCall.function.name, params);
-          
-          if (result.action) {
-            actions.push(result.action);
+    // Agregar mensaje actual
+    messages.push({
+      role: 'user',
+      content: input.message
+    });
+
+    // Convertir OPENAI_TOOLS a array mutable
+    const tools = [...OPENAI_TOOLS];
+
+    // Llamar a OpenAI con function calling
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+      tools,
+      tool_choice: "auto",
+      temperature: 0.7,
+      max_tokens: 1500,
+      presence_penalty: 0.1,
+      frequency_penalty: 0.1
+    });
+
+    const assistantMessage = completion.choices[0]?.message;
+    
+    if (!assistantMessage) {
+      throw new Error('No se recibió respuesta de OpenAI');
+    }
+
+    let responseText = assistantMessage.content || '';
+    const actions: AIAction[] = [];
+    let totalConfidence = 1.0;
+
+    // Procesar tool calls si existen
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      const toolResults: string[] = [];
+      
+      for (const toolCall of assistantMessage.tool_calls) {
+        if (toolCall.type === 'function' && toolCall.function) {
+          try {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
+            
+            console.log(`Ejecutando herramienta: ${functionName}`, functionArgs);
+            
+            const result = await executeAITool(functionName, functionArgs);
+            
+            if (result.success) {
+              toolResults.push(`✅ ${functionName}: ${JSON.stringify(result.data)}`);
+              if (result.action) {
+                actions.push(result.action);
+              }
+            } else {
+              toolResults.push(`❌ ${functionName}: ${result.error}`);
+              totalConfidence *= 0.8;
+            }
+          } catch (error) {
+            console.error('Error ejecutando herramienta:', error);
+            toolResults.push(`❌ Error ejecutando ${toolCall.function.name}: ${error}`);
+            totalConfidence *= 0.7;
           }
-
-          // Determinar respuesta de la herramienta
-          let toolResponse;
-          if (result.requiresConfirmation) {
-            toolResponse = `⚠️ ACCIÓN PENDIENTE DE CONFIRMACIÓN: ${result.action?.description}`;
-          } else if (result.success) {
-            toolResponse = JSON.stringify(result.data);
-          } else {
-            toolResponse = `Error: ${result.error}`;
-          }
-
-          // Agregar respuesta de la herramienta al historial
-          messages.push({
-            role: 'tool',
-            content: toolResponse,
-            tool_call_id: toolCall.id
-          });
-
-        } catch (error) {
-          // Agregar respuesta de error de la herramienta
-          messages.push({
-            role: 'tool',
-            content: `Error ejecutando ${toolCall.function.name}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-            tool_call_id: toolCall.id
-          });
         }
       }
 
-      // Segunda llamada a OpenAI con los resultados de las herramientas
-      const followUpCompletion = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages,
-        temperature: temperamentConfig.temperature,
-        top_p: temperamentConfig.top_p,
-        frequency_penalty: temperamentConfig.frequency_penalty,
-        presence_penalty: temperamentConfig.presence_penalty,
-        max_tokens: 2000
-      });
+      // Si hay resultados de herramientas, hacer una segunda llamada para interpretar
+      if (toolResults.length > 0) {
+        const followUpMessages = [...messages, {
+          role: 'assistant',
+          content: assistantMessage.content,
+          tool_calls: assistantMessage.tool_calls
+        }];
 
-      finalContent = followUpCompletion.choices[0].message.content || finalContent;
+        // Agregar resultados de herramientas
+        assistantMessage.tool_calls.forEach((toolCall, index) => {
+          followUpMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: toolResults[index] || 'Sin resultado'
+          });
+        });
+
+        const followUpCompletion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: followUpMessages,
+          temperature: 0.7,
+          max_tokens: 1000
+        });
+
+        const followUpMessage = followUpCompletion.choices[0]?.message?.content;
+        if (followUpMessage) {
+          responseText = followUpMessage;
+        }
+      }
     }
 
-    // Calcular confianza basada en tokens y contexto
-    const confidence = Math.min(0.95, 0.6 + (completion.usage?.total_tokens || 0) / 2000 * 0.35);
-
-    // Guardar log para auditoría
+    // Guardar en logs
     AI_LOGS.push({
       timestamp: Date.now(),
       sessionId,
       input: input.message,
-      output: finalContent,
-      temperament,
+      output: responseText,
       actions,
-      confidence
+      confidence: totalConfidence,
+      usage: completion.usage
     });
 
-    // Actualizar sesión de chat
-    const existingSession = await getChatSession(sessionId);
-    if (existingSession) {
-      existingSession.messages.push(
-        {
-          id: Date.now().toString(),
-          role: 'user',
-          content: input.message,
-          timestamp: Date.now()
-        },
-        {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: finalContent,
-          timestamp: Date.now(),
-          metadata: {
-            temperament,
-            confidence,
-            toolsUsed: response.tool_calls?.map(tc => tc.function.name) || [],
-            executedAction: actions.find(a => a.executed)?.description
-          }
-        }
-      );
-      existingSession.updatedAt = Date.now();
-      await saveChatSession(existingSession);
-    } else {
-      const newSession: ChatSession = {
-        id: sessionId,
-        title: input.message.substring(0, 50) + (input.message.length > 50 ? '...' : ''),
-        messages: [
-          {
-            id: Date.now().toString(),
-            role: 'user',
-            content: input.message,
-            timestamp: Date.now()
-          },
-          {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: finalContent,
-            timestamp: Date.now(),
-            metadata: {
-              temperament,
-              confidence,
-              toolsUsed: response.tool_calls?.map(tc => tc.function.name) || [],
-              executedAction: actions.find(a => a.executed)?.description
-            }
-          }
-        ],
-        temperament,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-      await saveChatSession(newSession);
-    }
-
     return {
-      text: finalContent,
+      text: responseText,
       actions,
-      confidence,
-      temperament,
-      sessionId
+      sessionId,
+      confidence: totalConfidence,
+      usage: completion.usage
     };
 
   } catch (error) {
-    console.error('Error en chatWithOpenAI:', error);
+    console.error('Error en OpenAI chat:', error);
     
-    // Guardar log de error
-    AI_LOGS.push({
-      timestamp: Date.now(),
+    return {
+      text: 'Lo siento, ocurrió un error al procesar tu solicitud. Por favor, inténtalo de nuevo.',
       sessionId,
-      input: input.message,
-      output: `Error: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-      temperament,
-      actions: []
-    });
-
-    throw new Error(`Error al procesar tu consulta: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      confidence: 0
+    };
   }
 }
 
-// Función auxiliar para confirmar y ejecutar acciones pendientes
+// Función simple para respuestas rápidas sin herramientas
+export async function quickChatWithOpenAI(message: string): Promise<string> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres Fermentia, un asistente experto en viticultura. Responde de manera concisa y útil.'
+        },
+        {
+          role: 'user',
+          content: message
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 500
+    });
+
+    return completion.choices[0]?.message?.content || 'No pude procesar tu solicitud.';
+  } catch (error) {
+    console.error('Error en quick chat:', error);
+    return 'Lo siento, no puedo responder en este momento.';
+  }
+}
+
+// Función para confirmar y ejecutar acciones
 export async function confirmAndExecuteAction(actionId: string, sessionId: string): Promise<boolean> {
   try {
-    const session = await getChatSession(sessionId);
-    if (!session) return false;
-
-    // Buscar la acción en los logs
-    const log = AI_LOGS.find(l => l.sessionId === sessionId && l.actions.some(a => a.id === actionId));
-    if (!log) return false;
-
-    const action = log.actions.find(a => a.id === actionId);
-    if (!action || action.executed) return false;
-
-    // Aquí ejecutarías la acción real (por ahora solo marcamos como ejecutada)
-    action.executed = true;
-    action.confirmation = false;
-
+    // Esta función se puede usar para confirmar acciones que requieren confirmación
+    // Por ahora retornamos true, pero se puede expandir para manejar confirmaciones reales
+    console.log(`Confirmando acción ${actionId} para sesión ${sessionId}`);
     return true;
   } catch (error) {
     console.error('Error confirmando acción:', error);

@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { chatWithOpenAI, confirmAndExecuteAction, getAILogs, getChatSession } from "@/ai/flows/openai-chat-flow";
+import { chatWithOpenAI, getAILogs, getChatSession, confirmAndExecuteAction } from "@/ai/flows/openai-chat-flow";
 import { addVineyard as addVineyardDB } from "@/lib/data";
 import type { Message } from "@/types";
 import { revalidatePath } from "next/cache";
@@ -14,27 +14,23 @@ const chatSchema = z.object({
     content: z.string(),
     timestamp: z.number().optional(),
     metadata: z.object({
-      temperament: z.string().optional(),
       confidence: z.number().optional(),
       toolsUsed: z.array(z.string()).optional(),
       executedAction: z.string().optional(),
     }).optional(),
   })),
   message: z.string(),
-  temperament: z.enum(['creativo', 'formal', 'técnico', 'directo', 'amigable']).optional(),
   sessionId: z.string().optional(),
 });
 
 export async function chatWithFermentia(
   history: Message[], 
   message: string, 
-  temperament?: 'creativo' | 'formal' | 'técnico' | 'directo' | 'amigable',
   sessionId?: string
 ) {
   const validatedInput = chatSchema.parse({ 
     history, 
     message, 
-    temperament: temperament || 'amigable',
     sessionId 
   });
   
@@ -46,12 +42,10 @@ export async function chatWithFermentia(
     }
     
     console.log("Llamando a OpenAI con mensaje:", message);
-    console.log("Temperamento:", validatedInput.temperament);
     
     const output = await chatWithOpenAI({
       history: validatedInput.history,
       message: validatedInput.message,
-      temperament: validatedInput.temperament,
       sessionId: validatedInput.sessionId
     });
     
@@ -61,8 +55,8 @@ export async function chatWithFermentia(
       text: output.text,
       actions: output.actions,
       confidence: output.confidence,
-      temperament: output.temperament,
-      sessionId: output.sessionId
+      sessionId: output.sessionId,
+      usage: output.usage
     };
   } catch (error) {
     console.error("Error detallado al chatear con OpenAI:", error);

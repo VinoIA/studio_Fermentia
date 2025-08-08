@@ -1,46 +1,32 @@
 
-// src/app/vineyards/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import {
-  Search,
   Plus,
   Edit,
   Trash2,
   Eye,
-  Filter,
   BarChart3,
   AlertTriangle,
   TrendingUp,
   Grape,
   Wine,
-  CircleUser,
   Bot,
   RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Vineyard, HarvestPrediction } from '@/types';
 import { VineyardCRUDModal } from '@/components/ui/vineyard-crud-modal';
 import { AIChatModal } from '@/components/ui/ai-chat-modal';
 import { AIRecommendations } from '@/components/ui/ai-recommendations';
-import { getAllVineyards, searchVineyards, getVineyardStats } from '@/app/vineyard-actions';
-import { getHarvestPrediction } from '@/lib/data';
+import { AINotificationSystem, useAINotifications } from '@/components/ui/ai-notification-system';
+import { fetchVineyards } from '@/lib/api';
 
 interface VineyardStats {
   total: number;
@@ -63,6 +49,9 @@ export default function VineyardsPage() {
   const [showCRUDModal, setShowCRUDModal] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [showAIRecommendations, setShowAIRecommendations] = useState(false);
+
+  // Hook para notificaciones de IA
+  const { hasUnreadCritical } = useAINotifications();
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -87,19 +76,18 @@ export default function VineyardsPage() {
   const loadVineyards = async () => {
     try {
       setIsLoading(true);
-      const data = await getAllVineyards();
+      const data = await fetchVineyards();
       setVineyards(data);
 
-      // Cargar predicciones para cada viñedo
+      // Cargar predicciones simuladas para cada viñedo
       const predictionMap = new Map<string, HarvestPrediction>();
       for (const vineyard of data) {
         try {
-          const prediction = await getHarvestPrediction(vineyard.id);
-          if (prediction) {
-            predictionMap.set(vineyard.id, prediction);
-          }
+          // Generar predicción simulada basada en datos del viñedo
+          const prediction = generatePredictionFromVineyard(vineyard);
+          predictionMap.set(vineyard.id, prediction);
         } catch (error) {
-          console.warn(`No se pudo cargar predicción para viñedo ${vineyard.id}`);
+          console.warn(`No se pudo generar predicción para viñedo ${vineyard.id}`);
         }
       }
       setPredictions(predictionMap);
@@ -112,11 +100,50 @@ export default function VineyardsPage() {
 
   const loadStats = async () => {
     try {
-      const statsData = await getVineyardStats();
+      const data = await fetchVineyards();
+      const statsData: VineyardStats = {
+        total: data.length,
+        totalPlots: data.reduce((sum, v) => sum + (v.totalPlots || 10), 0),
+        averageTemperature: data.length > 0 ? Math.round(data.reduce((sum, v) => sum + v.temperature, 0) / data.length * 10) / 10 : 0,
+        averageHumidity: data.length > 0 ? Math.round(data.reduce((sum, v) => sum + v.humidity, 0) / data.length * 10) / 10 : 0,
+        withPests: data.filter(v => v.iotData?.pests).length,
+        pestPercentage: data.length > 0 ? Math.round((data.filter(v => v.iotData?.pests).length / data.length) * 100) : 0
+      };
       setStats(statsData);
     } catch (error) {
       console.error('Error cargando estadísticas:', error);
     }
+  };
+
+  // Función para generar predicción simulada basada en datos del viñedo
+  const generatePredictionFromVineyard = (vineyard: Vineyard): HarvestPrediction => {
+    const temp = vineyard.temperature || 25;
+    const humidity = vineyard.humidity || 60;
+    
+    // Simular predicción basada en temperatura y humedad
+    let brix = 18 + (temp - 20) * 0.3 + (Math.random() - 0.5) * 2;
+    brix = Math.max(15, Math.min(28, brix));
+    
+    let yield_kg_ha = 7000 + (30 - Math.abs(temp - 25)) * 100 + (70 - Math.abs(humidity - 65)) * 50;
+    yield_kg_ha = Math.max(4000, Math.min(12000, Math.round(yield_kg_ha)));
+    
+    let recommendation: "optimal" | "wait" | "harvest_soon" = 'wait';
+    if (brix >= 24) recommendation = 'optimal';
+    else if (brix >= 22) recommendation = 'harvest_soon';
+
+    return {
+      id: vineyard.id,
+      vineyardId: vineyard.id,
+      vineyardName: vineyard.name,
+      location: vineyard.location,
+      grapeVarietals: vineyard.grapeVarietals,
+      brix_next_7d: Math.round(brix * 10) / 10,
+      yield_final: yield_kg_ha,
+      confidence_brix: 0.8 + Math.random() * 0.15,
+      confidence_yield: 0.75 + Math.random() * 0.2,
+      harvest_recommendation: recommendation,
+      created_at: Date.now()
+    };
   };
 
   const handleCRUDSuccess = (vineyard?: Vineyard) => {
@@ -135,61 +162,62 @@ export default function VineyardsPage() {
     <Card className="bg-card border-border/50 overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-lg">
       <CardContent className="p-0">
         <div className="flex flex-col">
-          {/* Imagen y datos básicos */}
-          <div className="flex items-stretch">
-            <div className="flex-shrink-0 w-[150px] md:w-[200px]">
-              <Image 
-                src={vineyard.imageUrl} 
-                alt={vineyard.name} 
-                width={200} 
-                height={150} 
-                className="w-full h-full object-cover"
-              />
+          {/* Datos básicos */}
+          <div className="p-4">
+            <div className="mb-4">
+              <h3 className="font-bold text-lg mb-1">{vineyard.name}</h3>
+              <p className="text-sm text-muted-foreground mb-2">{vineyard.location}</p>
+              <p className="text-sm text-muted-foreground mb-3">
+                Parcelas: {vineyard.totalPlots || 10} | Uvas: {vineyard.grapeVarietals}
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Temperatura:</span>
+                  <span className="ml-1 font-medium">{vineyard.temperature}°C</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Humedad:</span>
+                  <span className="ml-1 font-medium">{vineyard.humidity}%</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Estado:</span>
+                  <span className="ml-1 font-medium">{vineyard.harvestStatus}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Cosecha:</span>
+                  <span className="ml-1 font-medium">{vineyard.harvestDate}</span>
+                </div>
+              </div>
             </div>
-            <div className="p-4 flex-1 flex flex-col justify-between">
-              <div>
-                <h3 className="font-bold text-lg mb-1">{vineyard.name}</h3>
-                <p className="text-sm text-muted-foreground mb-2">{vineyard.location}</p>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Parcelas: {vineyard.totalPlots} | Uvas: {vineyard.grapeVarietals}
-                </p>
-                {vineyard.iotData.pests && (
-                  <Badge variant="destructive" className="mb-2 w-fit">
-                    <AlertTriangle className="mr-1 h-3 w-3" />
-                    Alerta de Plaga
-                  </Badge>
-                )}
-              </div>
               
-              {/* Acciones CRUD */}
-              <div className="flex gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openCRUDModal('view', vineyard)}
-                  className="flex-1"
-                >
-                  <Eye className="h-3 w-3 mr-1" />
-                  Ver
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openCRUDModal('edit', vineyard)}
-                  className="flex-1"
-                >
-                  <Edit className="h-3 w-3 mr-1" />
-                  Editar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openCRUDModal('delete', vineyard)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
+            {/* Acciones CRUD */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openCRUDModal('view', vineyard)}
+                className="flex-1"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                Ver
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openCRUDModal('edit', vineyard)}
+                className="flex-1"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Editar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openCRUDModal('delete', vineyard)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
             </div>
           </div>
           
@@ -268,57 +296,11 @@ export default function VineyardsPage() {
     </Card>
   );
 
-  const Header = () => (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-      <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
-        <Link href="/" className="flex items-center gap-2 text-lg font-semibold md:text-base">
-          <Wine className="h-6 w-6 text-primary" />
-          <span className="sr-only">Vineyard AI</span>
-        </Link>
-        <Link href="/" className="text-muted-foreground transition-colors hover:text-foreground">
-          Resumen
-        </Link>
-        <Link href="/vineyards" className="text-foreground transition-colors hover:text-foreground">
-          Gestionar Viñedos
-        </Link>
-      </nav>
-      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
-        <form className="ml-auto flex-1 sm:flex-initial">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar viñedos..."
-              className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </form>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="secondary" size="icon" className="rounded-full">
-              <CircleUser className="h-5 w-5" />
-              <span className="sr-only">Toggle user menu</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Ajustes</DropdownMenuItem>
-            <DropdownMenuItem>Soporte</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Cerrar Sesión</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
-  );
+  // Header is now handled by TopNav in layout
 
   if (isLoading) {
     return (
       <div className="flex flex-col min-h-screen">
-        <Header />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
@@ -331,8 +313,6 @@ export default function VineyardsPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header />
-      
       <main className="flex-1 p-4 md:p-6 space-y-6">
         {/* Header de la página con acciones */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -346,10 +326,17 @@ export default function VineyardsPage() {
             <Button
               variant="outline"
               onClick={() => setShowAIRecommendations(true)}
-              className="flex items-center gap-2"
+              className={`flex items-center gap-2 relative ${
+                hasUnreadCritical ? 'border-red-500 text-red-600 hover:bg-red-50' : ''
+              }`}
             >
               <Bot className="h-4 w-4" />
               Recomendaciones IA
+              {hasUnreadCritical && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse">
+                  <div className="absolute inset-0 bg-red-500 rounded-full animate-ping"></div>
+                </div>
+              )}
             </Button>
             <Button
               variant="outline"
@@ -483,13 +470,14 @@ export default function VineyardsPage() {
                           <td className="py-3 font-medium">{vineyard.name}</td>
                           <td className="py-3 text-muted-foreground">{vineyard.location}</td>
                           <td className="py-3 text-muted-foreground">{vineyard.grapeVarietals}</td>
-                          <td className="py-3">{vineyard.totalPlots}</td>
+                          <td className="py-3">{vineyard.totalPlots || 10}</td>
                           <td className="py-3">
-                            {vineyard.iotData.pests ? (
-                              <Badge variant="destructive">Alerta Plaga</Badge>
-                            ) : (
-                              <Badge variant="outline">Normal</Badge>
-                            )}
+                            <Badge variant={
+                              vineyard.harvestStatus === 'Completada' ? 'default' :
+                              vineyard.harvestStatus === 'En progreso' ? 'secondary' : 'outline'
+                            }>
+                              {vineyard.harvestStatus}
+                            </Badge>
                           </td>
                           <td className="py-3">
                             <div className="flex gap-1">
@@ -548,6 +536,12 @@ export default function VineyardsPage() {
         onClose={() => setShowAIRecommendations(false)}
         vineyards={vineyards}
       /> */}
+
+      {/* Sistema de notificaciones de IA */}
+      <AINotificationSystem 
+        enabled={true}
+        position="top-right"
+      />
     </div>
   );
 }

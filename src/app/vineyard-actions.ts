@@ -135,10 +135,10 @@ export async function getVineyardStats() {
   }
   
   const total = VINEYARD_DB.length;
-  const totalPlots = VINEYARD_DB.reduce((sum, v) => sum + v.totalPlots, 0);
-  const averageTemperature = VINEYARD_DB.reduce((sum, v) => sum + v.iotData.temp_mean_7d, 0) / total;
-  const averageHumidity = VINEYARD_DB.reduce((sum, v) => sum + v.iotData.hr_max_3d, 0) / total;
-  const withPests = VINEYARD_DB.filter(v => v.iotData.pests).length;
+  const totalPlots = VINEYARD_DB.reduce((sum, v) => sum + (v.totalPlots || 10), 0);
+  const averageTemperature = VINEYARD_DB.reduce((sum, v) => sum + (v.temperature || 0), 0) / total;
+  const averageHumidity = VINEYARD_DB.reduce((sum, v) => sum + (v.humidity || 0), 0) / total;
+  const withPests = VINEYARD_DB.filter(v => v.iotData?.pests || false).length;
   
   return {
     total,

@@ -1,10 +1,7 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
 
 @layer base {
   :root {
@@ -68,13 +65,91 @@ body {
     --sidebar-border: 217 33% 17%;
     --sidebar-ring: 340 65% 45%;
   }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+  
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: Arial, Helvetica, sans-serif;
+  }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+/* Animaciones para recomendaciones de IA */
+@keyframes slide-in-right {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
   }
-  body {
-    @apply bg-background text-foreground;
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Clases de utilidad para animaciones */
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Estilos para alertas críticas */
+.critical-notification {
+  position: relative;
+  overflow: hidden;
+}
+
+.critical-notification::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(239, 68, 68, 0.1),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+/* Mejoras de accesibilidad y UX */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-right,
+  .animate-pulse-glow,
+  .critical-notification::before {
+    animation: none;
+  }
+}
+
+/* Estilos responsivos para notificaciones */
+@media (max-width: 640px) {
+  .critical-notification {
+    margin: 0 1rem;
   }
 }

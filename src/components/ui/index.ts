@@ -22,4 +22,5 @@ export {
 export { AIChatModal } from './ai-chat-modal';
 export { Badge, badgeVariants } from './badge';
 export { AIRecommendations } from './ai-recommendations';
+export { AINotificationSystem, useAINotifications } from './ai-notification-system';
 export { VineyardCRUDModal } from './vineyard-crud-modal';
