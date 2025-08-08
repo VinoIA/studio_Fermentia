@@ -18,6 +18,9 @@ interface Recommendation {
   pestType?: string;
   riskLevel?: string;
   specific?: boolean;
+  confidence?: number;
+  data?: any;
+  timestamp?: number;
 }
 
 // Función para obtener datos de la API real
@@ -90,7 +93,10 @@ function generatePestAlerts(vineyards: any[]): Recommendation[] {
         vineyard: vineyardName,
         location: location,
         pestType: 'pulgon',
-        riskLevel: 'alto'
+        riskLevel: 'alto',
+        confidence: 0.85,
+        data: { temperature: temp, humidity: humidity, risk: 'alto' },
+        timestamp: Date.now()
       });
     }
 
@@ -106,7 +112,10 @@ function generatePestAlerts(vineyards: any[]): Recommendation[] {
         vineyard: vineyardName,
         location: location,
         pestType: 'arana_roja',
-        riskLevel: 'alto'
+        riskLevel: 'alto',
+        confidence: 0.90,
+        data: { temperature: temp, humidity: humidity, risk: 'alto' },
+        timestamp: Date.now()
       });
     }
 
@@ -122,7 +131,10 @@ function generatePestAlerts(vineyards: any[]): Recommendation[] {
         vineyard: vineyardName,
         location: location,
         pestType: 'trips',
-        riskLevel: 'medio'
+        riskLevel: 'medio',
+        confidence: 0.75,
+        data: { temperature: temp, humidity: humidity, risk: 'medio' },
+        timestamp: Date.now()
       });
     }
 
@@ -138,7 +150,10 @@ function generatePestAlerts(vineyards: any[]): Recommendation[] {
         vineyard: vineyardName,
         location: location,
         pestType: 'mildiu',
-        riskLevel: 'alto'
+        riskLevel: 'alto',
+        confidence: 0.95,
+        data: { temperature: temp, humidity: humidity, risk: 'crítico' },
+        timestamp: Date.now()
       });
     }
 
@@ -146,7 +161,7 @@ function generatePestAlerts(vineyards: any[]): Recommendation[] {
     if (temp >= 20 && temp <= 27) {
       pestAlerts.push({
         id: `pest-powdery-${vineyard.id}`,
-        type: 'info',
+        type: 'suggestion',
         priority: 'media',
         title: `⚪ Vigilar oídio en ${vineyardName}`,
         description: `Temperatura ${temp}°C favorable para desarrollo de oídio`,
@@ -154,7 +169,10 @@ function generatePestAlerts(vineyards: any[]): Recommendation[] {
         vineyard: vineyardName,
         location: location,
         pestType: 'oidio',
-        riskLevel: 'medio'
+        riskLevel: 'medio',
+        confidence: 0.70,
+        data: { temperature: temp, risk: 'medio' },
+        timestamp: Date.now()
       });
     }
   });
@@ -290,9 +308,35 @@ export async function GET() {
     // Obtener datos reales de la API
     const vineyards = await fetchVineyardsFromAPI();
     console.log(`📊 Datos obtenidos: ${vineyards.length} viñedos`);
+    
     if (!Array.isArray(vineyards)) {
       console.warn('⚠️ Formato inesperado de API; usando arreglo vacío');
-      return NextResponse.json({ success: true, recommendations: [], summary: 'No se encontraron viñedos' });
+      return NextResponse.json({ 
+        success: true, 
+        recommendations: [], 
+        summary: 'No se encontraron viñedos',
+        fallback: true 
+      });
+    }
+
+    // Si no hay viñedos, devolver mensaje amigable
+    if (vineyards.length === 0) {
+      return NextResponse.json({
+        success: true,
+        recommendations: [{
+          id: `empty_${Date.now()}`,
+          type: 'info',
+          priority: 'low',
+          title: '📋 Sin viñedos registrados',
+          description: 'No hay viñedos en el sistema para analizar. Agrega viñedos para obtener recomendaciones personalizadas.',
+          action: 'Agregar viñedos desde la sección Gestión de Viñedos',
+          vineyard: 'N/A',
+          location: 'N/A',
+          category: 'sistema'
+        }],
+        summary: 'Sistema listo para agregar viñedos',
+        stats: { total: 0, vineyards: 0 }
+      });
     }
 
     // Generar alertas de plagas
@@ -323,21 +367,32 @@ export async function GET() {
         careRecommendations: careCount,
         highPriority: highPriorityCount,
         vineyards: vineyards.length,
-        avgTemperature: vineyards.length > 0 ? (vineyards.reduce((sum: number, v: any) => sum + v.temperatura, 0) / vineyards.length).toFixed(1) : '0',
-        avgHumidity: vineyards.length > 0 ? (vineyards.reduce((sum: number, v: any) => sum + v.humedad, 0) / vineyards.length).toFixed(1) : '0'
+        avgTemperature: vineyards.length > 0 ? (vineyards.reduce((sum: number, v: any) => sum + (v.temperatura || 0), 0) / vineyards.length).toFixed(1) : '0',
+        avgHumidity: vineyards.length > 0 ? (vineyards.reduce((sum: number, v: any) => sum + (v.humedad || 0), 0) / vineyards.length).toFixed(1) : '0'
       }
     });
 
   } catch (error) {
     console.error('❌ Error en API de recomendaciones:', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Error interno del servidor al obtener recomendaciones', 
-        details: error instanceof Error ? error.message : 'Error desconocido' 
-      },
-      { status: 500 }
-    );
+    
+    // Fallback: devolver recomendación básica del sistema
+    return NextResponse.json({
+      success: true,
+      recommendations: [{
+        id: `fallback_${Date.now()}`,
+        type: 'info',
+        priority: 'medium',
+        title: '⚙️ Servicio de recomendaciones temporalmente limitado',
+        description: 'El sistema de recomendaciones está experimentando dificultades temporales. Los datos básicos están disponibles.',
+        action: 'Intenta nuevamente en unos minutos o contacta soporte',
+        vineyard: 'Sistema',
+        location: 'Global',
+        category: 'sistema'
+      }],
+      summary: 'Recomendaciones en modo fallback',
+      fallback: true,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    });
   }
 }
 

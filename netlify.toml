@@ -7,19 +7,23 @@
   NPM_VERSION = "10"
   NEXT_TELEMETRY_DISABLED = "1"
   NPM_FLAGS = "--legacy-peer-deps"
+  # Force compatibility with Next.js 15
   NETLIFY_NEXT_PLUGIN_SKIP = "false"
-  # Forzar instalación limpia
   NPM_CONFIG_FUND = "false"
   NPM_CONFIG_AUDIT = "false"
-  # Configuraciones adicionales para resolución de módulos
   NODE_OPTIONS = "--max-old-space-size=4096"
+  # Important: ensure URL is available in build context
+  NETLIFY_URL = "$DEPLOY_PRIME_URL"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Ensure serverless functions can find our API routes
 [functions]
   node_bundler = "esbuild"
-  included_files = ["src/**", "public/**"]
+  included_files = ["src/**", "public/**", ".next/**"]
+  # Increase timeout for external API calls
+  timeout = 30
 
 # Environment variables for production
 [context.production.environment]
