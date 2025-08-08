@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateVineyardRecommendations } from '@/ai/openai';
+import { initialVineyards } from '@/lib/data';
 
 const API_BASE_URL = 'https://6895921e039a1a2b288f86c2.mockapi.io/vinedos';
 
@@ -22,13 +23,19 @@ interface Recommendation {
 // Función para obtener datos de la API real
 async function fetchVineyardsFromAPI() {
   try {
+    // Timeout de 10s para entornos serverless (Netlify)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     const response = await fetch(API_BASE_URL, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
       cache: 'no-store',
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -38,7 +45,24 @@ async function fetchVineyardsFromAPI() {
     return data;
   } catch (error) {
     console.error('Error fetching vineyards from API:', error);
-    throw error;
+    // Fallback a datos locales cuando MockAPI no esté disponible en producción
+    try {
+      const fallback = initialVineyards.map((v, idx) => ({
+        id: parseInt(v.id, 10) || idx + 1,
+        nombre: v.name,
+        ubicacion: v.location,
+        variedadUva: v.grapeVarietals,
+        estadoCosecha: v.harvestStatus,
+        temperatura: v.temperature,
+        humedad: v.humidity,
+        fechaCosecha: v.harvestDate
+      }));
+      console.warn('⚠️ Using fallback vineyards for recommendations:', fallback.length);
+      return fallback;
+    } catch (mapErr) {
+      console.error('❌ Fallback mapping failed:', mapErr);
+      return [];
+    }
   }
 }
 
@@ -266,6 +290,10 @@ export async function GET() {
     // Obtener datos reales de la API
     const vineyards = await fetchVineyardsFromAPI();
     console.log(`📊 Datos obtenidos: ${vineyards.length} viñedos`);
+    if (!Array.isArray(vineyards)) {
+      console.warn('⚠️ Formato inesperado de API; usando arreglo vacío');
+      return NextResponse.json({ success: true, recommendations: [], summary: 'No se encontraron viñedos' });
+    }
 
     // Generar alertas de plagas
     const pestAlerts = generatePestAlerts(vineyards);
@@ -397,14 +425,24 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Error en POST de recomendaciones:', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Error al generar recomendaciones específicas', 
-        details: error instanceof Error ? error.message : 'Error desconocido' 
-      },
-      { status: 500 }
-    );
+    // Fallback: entregar recomendaciones básicas sin IA para no romper en producción
+    try {
+      const vineyards = await fetchVineyardsFromAPI();
+      const pestAlerts = generatePestAlerts(vineyards || []);
+      const careRecommendations = generateCareRecommendations(vineyards || []);
+      const all = [...pestAlerts, ...careRecommendations];
+      return NextResponse.json({
+        success: true,
+        recommendations: all,
+        summary: `Fallback: ${all.length} recomendaciones generadas sin IA`,
+        fallback: true
+      });
+    } catch (fallbackErr) {
+      return NextResponse.json(
+        { success: false, error: 'No fue posible generar recomendaciones', details: String(fallbackErr) },
+        { status: 500 }
+      );
+    }
   }
 }
 
