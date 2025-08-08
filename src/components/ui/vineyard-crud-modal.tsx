@@ -50,6 +50,10 @@ interface VineyardFormData {
   location: string;
   grapeVarietals: string;
   totalPlots: number;
+  temperature: number;
+  humidity: number;
+  harvestStatus: string;
+  harvestDate: string;
   iotData: {
     pests: boolean;
     temp_mean_7d: number;
@@ -62,15 +66,17 @@ interface VineyardFormData {
     variedad_onehot: number[];
     surface_ha: number;
   };
-  imageUrl: string;
-  imageHint: string;
 }
 
 const defaultFormData: VineyardFormData = {
   name: '',
   location: '',
   grapeVarietals: '',
-  totalPlots: 1,
+  totalPlots: 10,
+  temperature: 22,
+  humidity: 65,
+  harvestStatus: 'Pendiente',
+  harvestDate: new Date().toISOString().split('T')[0],
   iotData: {
     pests: false,
     temp_mean_7d: 22.5,
@@ -82,9 +88,7 @@ const defaultFormData: VineyardFormData = {
     cos_day: 0.86,
     variedad_onehot: [1, 0, 0, 0],
     surface_ha: 10
-  },
-  imageUrl: '/imgs/1.jpg',
-  imageHint: 'Viñedo creado por usuario'
+  }
 };
 
 export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }: VineyardCRUDModalProps) {
@@ -97,7 +101,28 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
   // Inicializar formulario cuando cambia el viñedo
   useEffect(() => {
     if (vineyard && (mode === 'edit' || mode === 'view' || mode === 'delete')) {
-      setFormData(vineyard);
+      setFormData({
+        name: vineyard.name,
+        location: vineyard.location,
+        grapeVarietals: vineyard.grapeVarietals,
+        totalPlots: vineyard.totalPlots || 10, // Valor por defecto si es undefined
+        temperature: vineyard.temperature,
+        humidity: vineyard.humidity,
+        harvestStatus: vineyard.harvestStatus,
+        harvestDate: vineyard.harvestDate,
+        iotData: {
+          pests: vineyard.iotData?.pests || false,
+          temp_mean_7d: vineyard.iotData?.temp_mean_7d || vineyard.temperature,
+          hr_max_3d: vineyard.iotData?.hr_max_3d || vineyard.humidity,
+          soil_moist_mean_24h: vineyard.iotData?.soil_moist_mean_24h || 50,
+          ndvi_anom: vineyard.iotData?.ndvi_anom || 0,
+          evi_anom: vineyard.iotData?.evi_anom || 0,
+          sin_day: vineyard.iotData?.sin_day || 0,
+          cos_day: vineyard.iotData?.cos_day || 0,
+          variedad_onehot: vineyard.iotData?.variedad_onehot || [1, 0, 0],
+          surface_ha: vineyard.iotData?.surface_ha || 10
+        }
+      });
     } else {
       setFormData(defaultFormData);
     }
@@ -305,17 +330,58 @@ export function VineyardCRUDModal({ isOpen, onClose, vineyard, mode, onSuccess }
                     disabled={mode === 'view'}
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="imageHint">Descripción de la Imagen</Label>
-                <Textarea
-                  id="imageHint"
-                  value={formData.imageHint}
-                  onChange={(e) => handleInputChange('imageHint', e.target.value)}
-                  placeholder="Descripción visual del viñedo..."
-                  disabled={mode === 'view'}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="temperature">Temperatura (°C)</Label>
+                    <Input
+                      id="temperature"
+                      type="number"
+                      value={formData.temperature}
+                      onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value) || 0)}
+                      min={-10}
+                      max={50}
+                      disabled={mode === 'view'}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="humidity">Humedad (%)</Label>
+                    <Input
+                      id="humidity"
+                      type="number"
+                      value={formData.humidity}
+                      onChange={(e) => handleInputChange('humidity', parseFloat(e.target.value) || 0)}
+                      min={0}
+                      max={100}
+                      disabled={mode === 'view'}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="harvestStatus">Estado de Cosecha</Label>
+                    <select
+                      id="harvestStatus"
+                      value={formData.harvestStatus}
+                      onChange={(e) => handleInputChange('harvestStatus', e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                      disabled={mode === 'view'}
+                    >
+                      <option value="Pendiente">Pendiente</option>
+                      <option value="En progreso">En progreso</option>
+                      <option value="Finalizada">Finalizada</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="harvestDate">Fecha de Cosecha</Label>
+                    <Input
+                      id="harvestDate"
+                      type="date"
+                      value={formData.harvestDate}
+                      onChange={(e) => handleInputChange('harvestDate', e.target.value)}
+                      disabled={mode === 'view'}
+                    />
+                  </div>
+                </div>
               </div>
             </TabsContent>
 

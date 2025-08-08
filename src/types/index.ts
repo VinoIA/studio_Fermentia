@@ -27,6 +27,18 @@ export type Vineyard = {
   imageHint?: string;
 };
 
+// Tipo para la API en español (MockAPI)
+export type VineyardAPI = {
+  id: number | string;
+  nombre: string;
+  ubicacion: string;
+  variedadUva: string;
+  estadoCosecha: string;
+  temperatura: number;
+  humedad: number;
+  fechaCosecha: string;
+};
+
 export type Message = {
   id: string;
   role: 'user' | 'assistant' | 'tool';

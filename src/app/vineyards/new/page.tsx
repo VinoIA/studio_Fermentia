@@ -57,78 +57,90 @@ export default function NewVineyardPage() {
                         <CardContent>
                             <div className="grid gap-6">
                                 <div className="grid gap-3">
-                                    <Label htmlFor="name">Nombre</Label>
+                                    <Label htmlFor="nombre">Nombre</Label>
                                     <Input
-                                        id="name"
-                                        name="name"
+                                        id="nombre"
+                                        name="nombre"
                                         type="text"
                                         className="w-full"
-                                        placeholder="Ej: Finca Roble Alto"
+                                        placeholder="Ej: Viñedo Los Olivos"
                                         required
                                     />
-                                    {state.errors?.name && <p className="text-sm text-destructive">{state.errors.name}</p>}
+                                    {state.errors?.nombre && <p className="text-sm text-destructive">{state.errors.nombre}</p>}
                                 </div>
                                 <div className="grid gap-3">
-                                    <Label htmlFor="location">Ubicación</Label>
+                                    <Label htmlFor="ubicacion">Ubicación</Label>
                                     <Input
-                                        id="location"
-                                        name="location"
-                                        placeholder="Ej: Valle de Napa, California"
+                                        id="ubicacion"
+                                        name="ubicacion"
+                                        placeholder="Ej: Valle de Ica, Perú"
                                         required
                                     />
-                                     {state.errors?.location && <p className="text-sm text-destructive">{state.errors.location}</p>}
+                                     {state.errors?.ubicacion && <p className="text-sm text-destructive">{state.errors.ubicacion}</p>}
                                 </div>
                                 <div className="grid gap-3">
-                                    <Label htmlFor="grapeVarietals">Variedades de Uva</Label>
+                                    <Label htmlFor="variedadUva">Variedad de Uva</Label>
                                     <Input
-                                        id="grapeVarietals"
-                                        name="grapeVarietals"
-                                        placeholder="Ej: Cabernet Sauvignon, Merlot"
+                                        id="variedadUva"
+                                        name="variedadUva"
+                                        placeholder="Ej: Quebranta, Malbec, Cabernet Sauvignon"
                                         required
                                     />
-                                     {state.errors?.grapeVarietals && <p className="text-sm text-destructive">{state.errors.grapeVarietals}</p>}
+                                     {state.errors?.variedadUva && <p className="text-sm text-destructive">{state.errors.variedadUva}</p>}
                                 </div>
                                 <div className="grid gap-3">
-                                    <Label htmlFor="totalPlots">Total de Parcelas</Label>
+                                    <Label htmlFor="estadoCosecha">Estado de Cosecha</Label>
+                                    <select
+                                        id="estadoCosecha"
+                                        name="estadoCosecha"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        required
+                                    >
+                                        <option value="">Seleccionar estado</option>
+                                        <option value="Pendiente">Pendiente</option>
+                                        <option value="En progreso">En progreso</option>
+                                        <option value="Finalizada">Finalizada</option>
+                                    </select>
+                                     {state.errors?.estadoCosecha && <p className="text-sm text-destructive">{state.errors.estadoCosecha}</p>}
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-3">
+                                        <Label htmlFor="temperatura">Temperatura (°C)</Label>
+                                        <Input
+                                            id="temperatura"
+                                            name="temperatura"
+                                            type="number"
+                                            placeholder="Ej: 25"
+                                            min="-10"
+                                            max="50"
+                                            required
+                                        />
+                                        {state.errors?.temperatura && <p className="text-sm text-destructive">{state.errors.temperatura}</p>}
+                                    </div>
+                                    <div className="grid gap-3">
+                                        <Label htmlFor="humedad">Humedad (%)</Label>
+                                        <Input
+                                            id="humedad"
+                                            name="humedad"
+                                            type="number"
+                                            placeholder="Ej: 65"
+                                            min="0"
+                                            max="100"
+                                            required
+                                        />
+                                        {state.errors?.humedad && <p className="text-sm text-destructive">{state.errors.humedad}</p>}
+                                    </div>
+                                </div>
+                                <div className="grid gap-3">
+                                    <Label htmlFor="fechaCosecha">Fecha de Cosecha</Label>
                                     <Input
-                                        id="totalPlots"
-                                        name="totalPlots"
-                                        type="number"
-                                        placeholder="Ej: 12"
+                                        id="fechaCosecha"
+                                        name="fechaCosecha"
+                                        type="date"
                                         required
                                     />
-                                     {state.errors?.totalPlots && <p className="text-sm text-destructive">{state.errors.totalPlots}</p>}
+                                     {state.errors?.fechaCosecha && <p className="text-sm text-destructive">{state.errors.fechaCosecha}</p>}
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                     <Card>
-                        <CardHeader>
-                            <CardTitle>Imagen del Viñedo</CardTitle>
-                            <CardDescription>
-                                Añade una imagen representativa para tu viñedo.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid gap-3">
-                                <Label htmlFor="imageUrl">URL de la Imagen</Label>
-                                <Input
-                                    id="imageUrl"
-                                    name="imageUrl"
-                                    type="url"
-                                    placeholder="https://placehold.co/400x300.png"
-                                    defaultValue="https://placehold.co/400x300.png"
-                                    required
-                                />
-                                {state.errors?.imageUrl && <p className="text-sm text-destructive">{state.errors.imageUrl}</p>}
-                            </div>
-                            <div className="grid gap-3 mt-4">
-                                <Label htmlFor="imageHint">Pista para IA (Opcional)</Label>
-                                <Input
-                                    id="imageHint"
-                                    name="imageHint"
-                                    placeholder="Ej: vineyard sunset"
-                                />
                             </div>
                         </CardContent>
                     </Card>
