@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +30,8 @@ import {
   Trash2,
   MessageSquare,
   Sparkles,
-  Download
+  Download,
+  Save
 } from 'lucide-react';
 import { chatWithFermentia } from '@/app/actions';
 import type { Message, AIAction, TemperamentType, ChatSession } from '@/types';
@@ -48,11 +50,16 @@ export function AIChatModal({
   isOpen: externalIsOpen, 
   onClose: externalOnClose,
   initialMessage,
-  persistSession = false,
+  persistSession: externalPersistSession = false,
   onVineyardAction
 }: AIChatModalProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const [internalPersistSession, setInternalPersistSession] = useState(externalPersistSession);
+  
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const persistSession = internalPersistSession;
+  const setPersistSession = setInternalPersistSession;
+  
   const setIsOpen = externalOnClose ? 
     (open: boolean) => { if (!open) externalOnClose(); } : 
     setInternalIsOpen;
@@ -69,6 +76,8 @@ export function AIChatModal({
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const [sessionTitle, setSessionTitle] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +108,11 @@ export function AIChatModal({
 
   // Función para crear nueva conversación
   const createNewSession = () => {
+    // Activar persistencia automáticamente si no está activada
+    if (!persistSession) {
+      setPersistSession(true);
+    }
+    
     const newSessionId = `session_${Date.now()}`;
     const newSession: ChatSession = {
       id: newSessionId,
@@ -159,23 +173,33 @@ export function AIChatModal({
   };
 
   // Función para guardar sesión actual
-  const saveCurrentSession = () => {
+  const saveCurrentSession = async () => {
     if (!currentSessionId || messages.length === 0) return;
     
-    const updatedSessions = chatSessions.map(session => 
-      session.id === currentSessionId 
-        ? { 
-            ...session, 
-            messages, 
-            temperament,
-            title: sessionTitle || session.title,
-            updatedAt: Date.now() 
-          }
-        : session
-    );
+    setIsSaving(true);
     
-    setChatSessions(updatedSessions);
-    localStorage.setItem('fermentia_chat_sessions', JSON.stringify(updatedSessions));
+    try {
+      const updatedSessions = chatSessions.map(session => 
+        session.id === currentSessionId 
+          ? { 
+              ...session, 
+              messages, 
+              temperament,
+              title: sessionTitle || session.title,
+              updatedAt: Date.now() 
+            }
+          : session
+      );
+      
+      setChatSessions(updatedSessions);
+      localStorage.setItem('fermentia_chat_sessions', JSON.stringify(updatedSessions));
+      setLastSaved(new Date());
+      
+      // Simular un pequeño delay para mostrar el estado de guardado
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Guardar automáticamente cuando cambien los mensajes
@@ -468,10 +492,37 @@ export function AIChatModal({
       </DialogTrigger>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" />
-            Fermentia - Asistente Inteligente de Viticultura
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              Fermentia - Asistente Inteligente de Viticultura
+            </DialogTitle>
+            
+            {/* Indicador de guardado */}
+            {persistSession && (
+              <div className="flex items-center gap-2 text-sm">
+                {isSaving ? (
+                  <div className="flex items-center gap-1 text-blue-600">
+                    <Save className="h-4 w-4 animate-pulse" />
+                    <span>Guardando...</span>
+                  </div>
+                ) : lastSaved ? (
+                  <div className="flex items-center gap-1 text-green-600">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Guardado {lastSaved.toLocaleTimeString()}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <MessageSquare className="h-4 w-4" />
+                    <span>Auto-guardado activado</span>
+                  </div>
+                )}
+                <Badge variant="outline" className="text-xs">
+                  {chatSessions.length} conversaciones
+                </Badge>
+              </div>
+            )}
+          </div>
         </DialogHeader>
         
         <Tabs defaultValue="chat" className="flex-1 flex flex-col">
@@ -484,6 +535,28 @@ export function AIChatModal({
           
           <TabsContent value="chat" className="flex-1 flex flex-col">
             <div className="flex-1 flex flex-col gap-4">
+              {/* Indicador de sesión actual */}
+              {persistSession && currentSessionId && (
+                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MessageSquare className="h-4 w-4 text-green-600" />
+                    <span className="font-medium">Sesión Actual:</span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {sessionTitle || `Chat ${currentSessionId.split('_')[1]}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span>{messages.length} mensajes</span>
+                    {isSaving && (
+                      <div className="flex items-center gap-1">
+                        <Save className="h-3 w-3 animate-pulse text-blue-500" />
+                        <span>Guardando...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               {/* Área de mensajes */}
               <ScrollArea className="flex-1 h-[400px] border rounded-lg p-4">
                 <div className="space-y-4">
@@ -516,7 +589,26 @@ export function AIChatModal({
                             : "bg-muted"
                         }`}
                       >
-                        <div>{message.content}</div>
+                        <div className="prose prose-sm max-w-none dark:prose-invert">
+                          <ReactMarkdown
+                            components={{
+                              // Personalizar componentes para que se vean bien en el chat
+                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-base font-semibold mb-2">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-sm font-medium mb-1">{children}</h3>,
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+                              li: ({ children }) => <li className="mb-1">{children}</li>,
+                              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                              em: ({ children }) => <em className="italic">{children}</em>,
+                              code: ({ children }) => <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-xs">{children}</code>,
+                              blockquote: ({ children }) => <blockquote className="border-l-2 border-gray-300 pl-2 italic">{children}</blockquote>,
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
                         {message.metadata?.confidence && (
                           <div className="mt-2 text-xs opacity-70">
                             Confianza: {(message.metadata.confidence * 100).toFixed(1)}%
